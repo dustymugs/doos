@@ -18,9 +18,10 @@ while 1:
     s.connect((host,port))
     # read from keyboard
     line = sys.stdin.readline()
+    line = line[:-1]
     if line == ' ':
         break
-    s.sendall(line[:-1] + '***endTransmission***') #strip out that last \n
+    s.sendall( str(len(line)) + '|' + line) #strip out that last \n
     data = s.recv(size)
     sys.stdout.write(data)
     sys.stdout.write('%')

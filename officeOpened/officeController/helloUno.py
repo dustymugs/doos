@@ -11,7 +11,7 @@ class howdy:
     def __init__(self, instanceId):
         self.fileExtension = ".odt"
         self.instanceId = instanceId
-        self.home = "/home/clint/officeOpened/homeDirectories/officeOpened0"
+        self.home = "/home/clint/officeOpened/homeDirectories/officeOpened" +  str(self.instanceId)
         self.service = "private:factory/swriter"
         
         #create a new OpenOffice process and have it listen on a pipe

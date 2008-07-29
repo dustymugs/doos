@@ -1,6 +1,7 @@
 from Queue import Queue
 import sys
 import threading
+#from officeController.helloUno import howdy
 
 #should only receive a job from the dispatcher when self.job is empty
 
@@ -8,16 +9,13 @@ import threading
 class singleProcess (threading.Thread):
     def __init__(self, threadNumber, jobQueue, server):
         threading.Thread.__init__(self)
-        #self.data = threading.local() #this class holds data which is unique to each thread
         self.server =  server  #doesn't need to be in self.data because the same dispatcher is used by all threads
         self.threadId = threadNumber
-        #self.job = False
         self.jobQueue = jobQueue
         self.jobId = 10000 * threadNumber
     
     def run(self):
-        from officeController.helloUno import howdy
-        ooTest = howdy(self.threadId)
+        #ooTest = howdy(self.threadId)
         
         while 1:
             print 'Thread ' + str(self.threadId) + " is at the labor exchange, looking for a yob.\n"
@@ -28,10 +26,15 @@ class singleProcess (threading.Thread):
                 self.jobQueue.task_done()
                 break
             else:
-                ooTest.makeAndSave("Bob Lob Law's Law Blog\nThread: " + str(self.threadId), self.jobId)
+                #first split the job into checksum, inital function name, and macro body
+                job = job.split('|', 2) #checksum, initial function name, and macro body are separated by | so we need to split twice here
+                checkSum = job[0]
+                initialFunction = job[1]
+                macro = job[2]
+                #ooTest.makeAndSave(job, self.jobId)
                 self.jobId += 1
             
-            print 'Thread ' + str(self.threadId) + " GOT A YOB!  Mira: \n-----\n" + str( len(job) ) + " characters\n-----\n\n"
+            print 'Thread ' + str(self.threadId) + " GOT A YOB!  Mira: \n-----\n" + str( job ) + " characters\n-----\n\n"
             self.jobQueue.task_done() #helps the queue keep track of how many jobs are still running
         
         
