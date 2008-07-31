@@ -7,6 +7,7 @@ Entering a blank line will exit the client.
 
 import socket
 import sys
+import hashlib
 
 host = '192.168.137.104'
 port = 8568
@@ -18,10 +19,17 @@ while 1:
     s.connect((host,port))
     # read from keyboard
     line = sys.stdin.readline()
-    line = line[:-1]
-    if line == ' ':
+    line = 'initial function!|' + line[:-1] #strip out that last \n
+    if line == '':
         break
-    s.sendall( str(len(line)) + '|' + line) #strip out that last \n
+    
+    #get the sha1 hash for checksumming
+    m = hashlib.sha1()
+    m.update(line)
+    checksum = m.hexdigest()
+
+    s.sendall( str(len(line)) + '|' + checksum + '|' + line)
+    sys.stdout.write("sending:\n" + str(len(line)) + '|' + checksum + '|' + line + "\n")
     data = s.recv(size)
     sys.stdout.write(data)
     sys.stdout.write('%')

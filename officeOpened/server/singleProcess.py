@@ -1,6 +1,7 @@
 from Queue import Queue
 import sys
 import threading
+import hashlib
 #from officeController.helloUno import howdy
 
 #should only receive a job from the dispatcher when self.job is empty
@@ -27,10 +28,9 @@ class singleProcess (threading.Thread):
                 break
             else:
                 #first split the job into checksum, inital function name, and macro body
-                job = job.split('|', 2) #checksum, initial function name, and macro body are separated by | so we need to split twice here
-                checkSum = job[0]
-                initialFunction = job[1]
-                macro = job[2]
+                job = job.split('|', 1) #checksum, initial function name, and macro body are separated by | so we need to split twice here
+                initialFunction = job[0]
+                macro = job[1]
                 #ooTest.makeAndSave(job, self.jobId)
                 self.jobId += 1
             

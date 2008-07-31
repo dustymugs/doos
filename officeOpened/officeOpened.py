@@ -4,13 +4,16 @@
 An echo server that uses threads to handle multiple clients at a time.
 Entering any line of input at the terminal will exit the server.
 """
-
+'''
+TODO: fix exception handling with socket events
+'''
 import select
 import socket
 import sys
 import threading
 from Queue import Queue
-import singleProcess
+import hashlib
+from server.singleProcess import singleProcess
 
 class Server:
     def __init__(self):
@@ -22,15 +25,15 @@ class Server:
         self.jobQueue = Queue()
         self.outputQueue = Queue()
         self.dataThreads = []
-        self.singleProcesss = []
+        self.singleProcesses = []
         self.running = True
         self.input = []
         
-        #Create numsingleProcesss singleProcess's, indexed by an id.
-        numsingleProcesss = 4
-        for i in range(numsingleProcesss):
-            self.singleProcesss.append( singleProcess.singleProcess(i, self.jobQueue, self) )
-            self.singleProcesss[i].start()
+        #Create numsingleProcesses singleProcess's, indexed by an id.
+        numsingleProcesses = 4
+        for i in range(numsingleProcesses):
+            self.singleProcesses.append( singleProcess(i, self.jobQueue, self) )
+            self.singleProcesses[i].start()
 
 
     def open_socket(self):
@@ -86,7 +89,7 @@ class Server:
         #exiting gracefully; allow all threads to finish before closing
         # close all threads
         self.server.close()
-        for c in self.singleProcesss:
+        for c in self.singleProcesses:
             self.jobQueue.put('terminate', True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
         self.jobQueue.join()
 
@@ -104,26 +107,51 @@ class dataGrabber(threading.Thread):
         try:
             data_chunks = [] #we're just concatenating the chunks of data received, but this is faster than string concatenation
             buf = self.client.recv(self.size)
-            running = True
-            while buf: #if the last chunk ends with ***endTransmission***, it's the end of the transmission
+            bytesExpected = None
+            bytesGotten = 0
+            
+            while True: #the first part of the message, up to '|', is the length of the transmission.  Keep going till it's been exceeded
                 if buf == '':
-                    raise socket.error("Socket has been broken without the '***endTransmission***' command. It probably failed.")
-                if buf[-21:] == '***endTransmission***':
-                    data_chunks.append(buf[:-21])
-                    break
+                    raise socket.error("Socket has been broken before transmission completed. It probably failed.")
                 data_chunks.append(buf)
-                buf = self.client.recv(self.size)
+                #find out how many bytes will be sent
+                if bytesExpected is None:
+                    buf = "".join(data_chunks)
+                    i = buf.find("|")
+                    if i is not -1:
+                        bytesExpected = int(buf[:i])
+                        data_chunks = [ buf[i+1:] ]
+                        bytesGotten = len( data_chunks[0] )
+                    else:
+                        bytesGotten += len(buf)
+
+                if bytesExpected is None or bytesGotten < bytesExpected:
+                    buf = self.client.recv(self.size)
+                else:
+                    break
+            
             #data_chunks is a list of chunks of the data.  Join them together.
             data = "".join(data_chunks)
-            if data:
-                self.client.sendall( str(len(data)) )
-                if data == 'terminate':
-                    self.server.terminate()
-                else:
-                    self.server.jobQueue.put( data, True )
+            data = data.split('|', 1) #pull out the checksum from the data
+            checksum = data[0]
+            data = data[1]
+            
+            #get the sha1 hash for checksumming
+            m = hashlib.sha1()
+            m.update(data)
+            if (m.hexdigest() != checksum):
+                raise Exception("Checksum failed! ")
+            
+            self.client.sendall( str(len(data)) )
+            if data == 'terminate':
+                self.server.terminate()
+            else:#or else we're good to put it in the queue
+                self.server.jobQueue.put( data, True )
             
         except socket.error, (value, message):
             print "Error receiving data:\n" + str(value) + ': ' + message + "\n" + repr(self.client)
+        except Exception, (message):
+            print message
         finally:
             #now close the connection 
             self.client.close()
