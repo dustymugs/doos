@@ -17,21 +17,23 @@ sys.stdout.write('%')
 while 1:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host,port))
+    args = 'ARGUMENT'
     # read from keyboard
     line = sys.stdin.readline()
-    line = 'initial function!|' + line[:-1] #strip out that last \n
+    line = args + '::file start::' + line[:-1] #strip out that last \n
     if line == '':
         break
     
     #get the sha1 hash for checksumming
     m = hashlib.sha1()
     m.update(line)
-    checksum = m.hexdigest()
+    checksum = str( m.hexdigest() )
+    line = checksum + '|' + line
 
-    s.sendall( str(len(line)) + '|' + checksum + '|' + line)
-    sys.stdout.write("sending:\n" + str(len(line)) + '|' + checksum + '|' + line + "\n")
+    s.sendall( str(len(line)) + '|' + line)
+    sys.stdout.write("sending:\n" + str(len(line)) + '|' + line + "\n")
     data = s.recv(size)
-    sys.stdout.write(data)
+    sys.stdout.write(data + "\n(was received)\n\n")
     sys.stdout.write('%')
     s.close()
 s.close()

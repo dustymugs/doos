@@ -2,6 +2,7 @@ from Queue import Queue
 import sys
 import threading
 import hashlib
+import os
 #from officeController.helloUno import howdy
 
 #should only receive a job from the dispatcher when self.job is empty
@@ -20,21 +21,19 @@ class singleProcess (threading.Thread):
         
         while 1:
             print 'Thread ' + str(self.threadId) + " is at the labor exchange, looking for a yob.\n"
-            job = self.jobQueue.get(True) #block this thread's execution until it gets something from the queue
+            dirpath, args = self.jobQueue.get(True) #block this thread's execution until it gets something from the queue
+            
             #if the server tells the thread to terminate gracefully
-            if str(job) == 'terminate':
+            if args == 'terminate':
                 print 'Thread ' + str(self.threadId) + ' exiting gracefully...\n'
                 self.jobQueue.task_done()
                 break
             else:
-                #first split the job into checksum, inital function name, and macro body
-                job = job.split('|', 1) #checksum, initial function name, and macro body are separated by | so we need to split twice here
-                initialFunction = job[0]
-                macro = job[1]
-                #ooTest.makeAndSave(job, self.jobId)
+                #ooTest.makeAndSave(dirpath, args, self.jobId)
                 self.jobId += 1
             
-            print 'Thread ' + str(self.threadId) + " GOT A YOB!  Mira: \n-----\n" + str( job ) + " characters\n-----\n\n"
+            print 'Thread ' + str(self.threadId) + " GOT A YOB!  Mira: \n-----\n" + dirpath + "\nwith args:\n" + str(args) + '\n-----\n\n'
+            os.remove(dirpath) #remove the file now that we're done with it
             self.jobQueue.task_done() #helps the queue keep track of how many jobs are still running
         
         

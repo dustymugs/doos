@@ -10,6 +10,7 @@ TODO: fix exception handling with socket events
 import select
 import socket
 import sys
+from os import path
 import threading
 from Queue import Queue
 import hashlib
@@ -90,7 +91,7 @@ class Server:
         # close all threads
         self.server.close()
         for c in self.singleProcesses:
-            self.jobQueue.put('terminate', True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
+            self.jobQueue.put( (None, 'terminate'), True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
         self.jobQueue.join()
 
 
@@ -100,6 +101,7 @@ class dataGrabber(threading.Thread):
         self.client = client
         self.size = server.size
         self.server = server
+        self.home = "/home/clint/officeOpened/homeDirectories/"
         client.setblocking(1)
         client.settimeout(60.0)
 
@@ -115,26 +117,23 @@ class dataGrabber(threading.Thread):
                     raise socket.error("Socket has been broken before transmission completed. It probably failed.")
                 data_chunks.append(buf)
                 #find out how many bytes will be sent
-                if bytesExpected is None:
-                    buf = "".join(data_chunks)
-                    i = buf.find("|")
-                    if i is not -1:
-                        bytesExpected = int(buf[:i])
-                        data_chunks = [ buf[i+1:] ]
+                if bytesExpected is None:  #if we still haven't determined the number of bytes to expect
+                    buf = "".join(data_chunks) #in case the bytesExpected number was in another buffering, join whatever we've got
+                    i = buf.find("|")  #fields are delimited by | like so: bytesExpected|checkSum|args|data
+                    if i is not -1:  #if | is found, then we have the bytesExpected
+                        bytesExpected = int(buf[:i])  #bytesExpected is the string from the beginning until the |
+                        data_chunks = [ buf[i+1:] ]  #we probably have more than just bytesExpected in the buffer, so store that data
                         bytesGotten = len( data_chunks[0] )
-                    else:
-                        bytesGotten += len(buf)
 
+                #if we're still determining the number of bytes to expect or we're still downloading the file,
                 if bytesExpected is None or bytesGotten < bytesExpected:
-                    buf = self.client.recv(self.size)
+                    buf = self.client.recv(self.size)  #get more data
                 else:
-                    break
+                    break  #otherwise we're done.
             
             #data_chunks is a list of chunks of the data.  Join them together.
             data = "".join(data_chunks)
-            data = data.split('|', 1) #pull out the checksum from the data
-            checksum = data[0]
-            data = data[1]
+            checksum, data = data.split('|', 1) #pull out the checksum from the data
             
             #get the sha1 hash for checksumming
             m = hashlib.sha1()
@@ -142,11 +141,25 @@ class dataGrabber(threading.Thread):
             if (m.hexdigest() != checksum):
                 raise Exception("Checksum failed! ")
             
-            self.client.sendall( str(len(data)) )
+            #DEBUG: send back the checksum
+            self.client.sendall( str( m.hexdigest() ) )
             if data == 'terminate':
-                self.server.terminate()
-            else:#or else we're good to put it in the queue
-                self.server.jobQueue.put( data, True )
+                self.server.terminate() #tell the server to shut down all threads
+            else:   #or else we're good to put it in the queue
+                    #so dump the data to a file
+                
+                args, data = data.split('::file start::', 1)
+                dirpath = self.home + 'files/' + str(checksum)  #whose filename is the data's checksum
+                
+                while path.exists(dirpath):  #if the file already exists, keep generating a random filename until an available one is found
+                    import random
+                    randgen = random.Random()
+                    randgen.seed()
+                    dirpath = self.home + 'files/' + str( randgen.randint(0,15999999) )
+                file = open(dirpath, 'w')
+                file.write( data ) #save the data
+                #finally, put the data into the queue
+                self.server.jobQueue.put( (dirpath, args), True ) 
             
         except socket.error, (value, message):
             print "Error receiving data:\n" + str(value) + ': ' + message + "\n" + repr(self.client)
