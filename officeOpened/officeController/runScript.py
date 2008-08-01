@@ -5,17 +5,16 @@ TODO: add a property to overwrite any file with the same name, and also delete e
 import subprocess
 import time
 import uno
+from com.sun.star.beans import PropertyValue
 import os
 
 class howdy:
     def __init__(self, instanceId):
-        self.fileExtension = ".odt"
         self.instanceId = instanceId
-        self.home = "/home/clint/officeOpened/homeDirectories/officeOpened0"
-        self.service = "private:factory/swriter"
+        self.home = "/home/clint/officeOpened/homeDirectories/officeOpened" + str(instanceId)
         
         #create a new OpenOffice process and have it listen on a pipe
-        subprocess.Popen( ('soffice', "-accept=pipe,name=officeOpened" + str(self.instanceId) + ";urp;", "-headless", "-nofirststartwizard"), 
+        subprocess.Popen( ('soffice', "-accept=pipe,name=officeOpened" + str(instanceId) + ";urp;", "-headless", "-nofirststartwizard"), 
                                                                             env={ "PATH": os.environ["PATH"], 
                                                                             "HOME": self.home } ) #we need to have several 'homes' to have
                                                                                                     #several OO instances running
@@ -35,25 +34,23 @@ class howdy:
         self.desktop = self.ctx.ServiceManager.createInstanceWithContext( "com.sun.star.frame.Desktop",self.ctx)
         print 'got central desktop object\n'
     
+        self.dispatchHelper = self.ctx.ServiceManager.createInstanceWithContext( "com.sun.star.frame.DispatchHelper", self.ctx )
+        print 'created dispatch helper\n'
+        
+    
     def makeAndSave(self, content, jobId):
-        self.document = self.desktop.loadComponentFromURL( self.service, "_blank", 0, () )
-        print 'created the current document\n'
-        # access the current writer document
-        #document = desktop.getCurrentComponent()
         
-        # access the document's text property
-        text = self.document.Text
-        print "got the document\'s text property\n"
-        # create a cursor
-        cursor = text.createTextCursor()
-        print 'created a cursor\n'
-        # insert the text into the document
-        text.insertString( cursor, content, 0 )
-        print 'inserted string\n'
+        properties = []
+        p = PropertyValue()
+        p.Name = "bob"
+        p.Value = 'macro:///AutoOOo.OOoCore.runScript\(/home/clint/OOo/sample.script,Main\)'
+        properties.append(p)
+        properties = tuple(properties)
+
+        self.dispatchHelper.executeDispatch(self.desktop, 'macro:///AutoOOo.OOoCore.runScript(/home/clint/OOo/sample.script,Main)', "", 0, properties) 
+        print 'executed dispatch\n'
         
-        fileExtension = '.odt'
-        self.document.storeToURL( 'file:///home/clint/officeOpened/homeDirectories/officeOpened' + str(self.instanceId) + '/' \
-                                  +  str(jobId) + self.fileExtension, () )
+
         # Do a nasty thing before exiting the python process. In case the
         # last call is a oneway call (e.g. see idl-spec of insertString),
         # it must be forced out of the remote-bridge caches before python
