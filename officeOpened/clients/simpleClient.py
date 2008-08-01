@@ -17,12 +17,18 @@ sys.stdout.write('%')
 while 1:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host,port))
-    args = 'ARGUMENT'
+    args = 'Main'
     # read from keyboard
     line = sys.stdin.readline()
-    line = args + '::file start::' + line[:-1] #strip out that last \n
-    if line == '':
+    if line == 'sample.script\n':
+        file = open('/home/clint/OOo/sample.script')
+        line = args + '::file start::' + file.read()
+        file.close()
+    elif line == '':
         break
+    else:
+        line = args + '::file start::' + line[:-1] #strip out that last \n
+    
     
     #get the sha1 hash for checksumming
     m = hashlib.sha1()

@@ -8,7 +8,7 @@ import uno
 from com.sun.star.beans import PropertyValue
 import os
 
-class howdy:
+class scriptRunner:
     def __init__(self, instanceId):
         self.instanceId = instanceId
         self.home = "/home/clint/officeOpened/homeDirectories/officeOpened" + str(instanceId)
@@ -38,16 +38,17 @@ class howdy:
         print 'created dispatch helper\n'
         
     
-    def makeAndSave(self, content, jobId):
+    def execute(self, dirpath, initFunc, jobId):
         
         properties = []
         p = PropertyValue()
-        p.Name = "bob"
-        p.Value = 'macro:///AutoOOo.OOoCore.runScript\(/home/clint/OOo/sample.script,Main\)'
+        p.Name = "junk"
+        p.Value = 'in the trunk'
         properties.append(p)
         properties = tuple(properties)
 
-        self.dispatchHelper.executeDispatch(self.desktop, 'macro:///AutoOOo.OOoCore.runScript(/home/clint/OOo/sample.script,Main)', "", 0, properties) 
+        self.dispatchHelper.executeDispatch(self.desktop, 'macro:///AutoOOo.OOoCore.runScript(' + dirpath + ',' \
+                                             + initFunc + ')', "", 0, properties) 
         print 'executed dispatch\n'
         
 
@@ -61,5 +62,5 @@ class howdy:
         print 'done'
         
 if __name__ == '__main__':
-    juno = howdy(2)
-    juno.makeAndSave('this was a triumph', 321)
+    juno = scriptRunner(2)
+    juno.execute('this was a triumph', 321)
