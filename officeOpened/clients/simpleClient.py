@@ -18,8 +18,8 @@ while 1:
     args = 'Main'
     # read from keyboard
     line = sys.stdin.readline()
-    if line == 'sample.script\n':
-        file = open('/home/clint/OOo/sample.script')
+    if line == 'busy\n':
+        file = open('/home/clint/OOo/busy.script')
         line = args + '::file start::' + file.read()
         file.close()
     elif line == '':
