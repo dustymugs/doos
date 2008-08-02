@@ -15,8 +15,6 @@ size = 4096
 sys.stdout.write('%')
 
 while 1:
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((host,port))
     args = 'Main'
     # read from keyboard
     line = sys.stdin.readline()
@@ -28,7 +26,9 @@ while 1:
         break
     else:
         line = args + '::file start::' + line[:-1] #strip out that last \n
-    
+        
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((host,port))
     
     #get the sha1 hash for checksumming
     m = hashlib.sha1()

@@ -24,21 +24,24 @@ class scriptRunner:
         localContext = uno.getComponentContext()
         
         # create the UnoUrlResolver
-        resolver = localContext.ServiceManager.createInstanceWithContext(
+        self.resolver = localContext.ServiceManager.createInstanceWithContext(
                         "com.sun.star.bridge.UnoUrlResolver", localContext )
         
+        
+        
+    
+    def execute(self, dirpath, initFunc, jobId):
+        
         # connect to the running office
-        self.ctx = resolver.resolve( "uno:pipe,name=officeOpened" + str(self.instanceId) + ";urp;StarOffice.ComponentContext" )
+        self.ctx = self.resolver.resolve( "uno:pipe,name=officeOpened" + str(self.instanceId) + ";urp;StarOffice.ComponentContext" )
         print 'connected\n'
+        
         # get the central desktop object
         self.desktop = self.ctx.ServiceManager.createInstanceWithContext( "com.sun.star.frame.Desktop",self.ctx)
         print 'got central desktop object\n'
     
         self.dispatchHelper = self.ctx.ServiceManager.createInstanceWithContext( "com.sun.star.frame.DispatchHelper", self.ctx )
         print 'created dispatch helper\n'
-        
-    
-    def execute(self, dirpath, initFunc, jobId):
         
         properties = []
         p = PropertyValue()
