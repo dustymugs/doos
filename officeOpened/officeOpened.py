@@ -3,9 +3,21 @@
 """
 An echo server that uses threads to handle multiple clients at a time.
 Entering any line of input at the terminal will exit the server.
+
+When a client sends a job, he is assigned a ticket number which uniquely identifies the job in the system.
+The input sent by the client is stored in homeDirectories/input/**ticket number**
+When the job processing is finished, the job is stored in homeDirectories/output/**ticket number**
+
+When a client requests a ticket, the system searches the output folder for the ticket as a filename and returns the file if found.
+    If that file is not found, but it is found in input/, then the server responds that the job is still being processed
+    if that file is not found in either folder, the server replies that the ticket id is unknown
 """
 '''
 TODO: fix exception handling with socket events
+    On server startup, check files/input for any files, and run those first.  Those are files which were processing when the server died.
+        Clients may be looking for them.
+    Kill everyone who ignores SIGTERM
+    
 '''
 import select
 import socket
@@ -149,13 +161,18 @@ class dataGrabber(threading.Thread):
                     #so dump the data to a file
                 
                 args, data = data.split('::file start::', 1)
-                dirpath = self.home + 'files/' + str(checksum)  #whose filename is the data's checksum
+                filename = str(checksum)  #whose filename is the data's checksum
                 
-                while path.exists(dirpath):  #if the file already exists, keep generating a random filename until an available one is found
+                #if the file already exists, keep generating a random filename until an available one is found
+                #keep checking the output folder too because this filename will be the unique ticket number, and
+                #if there's a file there, that ticket is in the system (and waiting for some client to come claim it)
+                while path.exists(self.home + 'files/input/' + filename) or path.exists(self.home + 'files/output/' + filename):
                     import random
                     randgen = random.Random()
                     randgen.seed()
-                    dirpath = self.home + 'files/' + str( randgen.randint(0,15999999) )
+                    filename = str( randgen.randint(0,15999999) )
+                #path to the input file
+                dirpath = self.home + 'files/input/' + filename
                 file = open(dirpath, 'w')
                 file.write( data ) #save the data
                 #finally, put the data into the queue

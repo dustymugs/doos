@@ -1,5 +1,13 @@
 '''
 TODO: add a property to overwrite any file with the same name, and also delete everything with same name at startup
+    When a thread is launched, be sure to nuke the output folder in case any residual files are chilling there.
+
+    When a script is done running, zip it IN THE THREAD'S OUTPUT FOLDER, transfer the zip over the server's output folder, and nuke 
+        the thread's output folder.
+    
+    Change the script loading process so that the corrected script is stored inside the home directory and run from there.  This way,
+        if the server crashes while doing the path correction (updating <<OUTDIR>>, that is), it can restart the job with the input still
+        intact.
 '''
 
 import subprocess
@@ -7,14 +15,16 @@ import time
 import uno
 from com.sun.star.beans import PropertyValue
 import os
+import signal
 
 class scriptRunner:
     def __init__(self, instanceId):
         self.instanceId = instanceId
-        self.home = "/home/clint/officeOpened/homeDirectories/officeOpened" + str(instanceId)
+        self.home = "/home/clint/officeOpened/homeDirectories/officeOpened" + str(instanceId) + '/'
         
         #create a new OpenOffice process and have it listen on a pipe
-        subprocess.Popen( ('soffice', "-accept=pipe,name=officeOpened" + str(instanceId) + ";urp;", "-headless", "-nofirststartwizard"), 
+        self.childOffice = \
+            subprocess.Popen( ('soffice', "-accept=pipe,name=officeOpened" + str(instanceId) + ";urp;", "-headless", "-nofirststartwizard"), 
                                                                             env={ "PATH": os.environ["PATH"], 
                                                                             "HOME": self.home } ) #we need to have several 'homes' to have
                                                                                                     #several OO instances running
@@ -28,9 +38,27 @@ class scriptRunner:
                         "com.sun.star.bridge.UnoUrlResolver", localContext )
         
         
-        
+    def __del__(self):
+        print 'Murthering ' + str(self.childOffice.pid) + '\n'
+        os.kill (self.childOffice.pid, signal.SIGTERM)
     
-    def execute(self, dirpath, initFunc, jobId):
+    def execute(self, dirpath, initFunc):
+        '''
+        Create a folder in this thread's home directory/output named after the ticket number of the current job.  This folder will contain 
+            any output files produced by the macro.  Search through the macro file and replace any instances of <<OUTDIR>> with the place
+            we want the script to send output, which is the ticket folder we created.
+        Grab the script located at dirpath, then connect to OpenOffice and run it.
+        When done, move the folder we created to the program folder/files/output
+        '''
+        (junk, ticketNumber) = dirpath.rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
+        ticketNumber = str(ticketNumber)
+        os.mkdir(self.home + 'output/' + ticketNumber) #all macro output should go here
+        file = open(dirpath, 'r+') #open the passed macro
+        #now rewrite instances of <<OUTDIR>> in the macro with the output location we want
+        pathCorrected = file.read().replace('<<OUTDIR>>', self.home + 'output/' + ticketNumber)
+        file.truncate(0) #to make sure we overwrite the file
+        file.write(pathCorrected)
+        file.close()
         
         # connect to the running office
         self.ctx = self.resolver.resolve( "uno:pipe,name=officeOpened" + str(self.instanceId) + ";urp;StarOffice.ComponentContext" )
@@ -54,7 +82,7 @@ class scriptRunner:
                                              + initFunc + ')', "", 0, properties) 
         print 'executed dispatch\n'
         
-
+        # As quoted from the PyUno tutorial:
         # Do a nasty thing before exiting the python process. In case the
         # last call is a oneway call (e.g. see idl-spec of insertString),
         # it must be forced out of the remote-bridge caches before python
@@ -62,7 +90,12 @@ class scriptRunner:
         # the target object.
         # I do this here by calling a cheap synchronous call (getPropertyValue).
         self.ctx.ServiceManager
+        
+        #We're done with the macro.  Now move the output folder into the server-wide output folder
+        os.rename(self.home + 'output/' + ticketNumber, self.home + '../files/output/' + ticketNumber)
+        
         print 'done'
+        
         
 if __name__ == '__main__':
     juno = scriptRunner(2)

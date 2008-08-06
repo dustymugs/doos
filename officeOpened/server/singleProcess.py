@@ -14,7 +14,6 @@ class singleProcess (threading.Thread):
         self.server =  server  #doesn't need to be in self.data because the same dispatcher is used by all threads
         self.threadId = threadNumber
         self.jobQueue = jobQueue
-        self.jobId = 10000 * threadNumber
     
     def run(self):
         ooScriptRunner = runScript.scriptRunner(self.threadId)
@@ -29,8 +28,7 @@ class singleProcess (threading.Thread):
                 self.jobQueue.task_done()
                 break
             else:
-                ooScriptRunner.execute(dirpath, args, self.jobId)
-                self.jobId += 1
+                ooScriptRunner.execute(dirpath, args)
             
             print 'Thread ' + str(self.threadId) + " GOT A YOB!  Mira: \n-----\n" + dirpath + "\nwith args:\n" + str(args) + '\n-----\n\n'
             os.remove(dirpath) #remove the file now that we're done with it
