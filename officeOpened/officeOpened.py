@@ -166,17 +166,24 @@ class dataGrabber(threading.Thread):
                 #if the file already exists, keep generating a random filename until an available one is found
                 #keep checking the output folder too because this filename will be the unique ticket number, and
                 #if there's a file there, that ticket is in the system (and waiting for some client to come claim it)
-                while path.exists(self.home + 'files/input/' + filename) or path.exists(self.home + 'files/output/' + filename):
+                while path.exists(self.home + 'files/input/' + filename + '.data') \
+                        or path.exists(self.home + 'files/output/' + filename + '.data'):
                     import random
                     randgen = random.Random()
                     randgen.seed()
                     filename = str( randgen.randint(0,15999999) )
                 #path to the input file
                 dirpath = self.home + 'files/input/' + filename
-                file = open(dirpath, 'w')
+                file = open(dirpath + '.data', 'w')
                 file.write( data ) #save the data
+                file.close()
+                
+                #now write arguments to the handler for this command to a file
+                file = open(dirpath + '.args', 'w')
+                file.write(args)
+                file.close()
                 #finally, put the data into the queue
-                self.server.jobQueue.put( (dirpath, args), True ) 
+                self.server.jobQueue.put( dirpath, True ) 
             
         except socket.error, (value, message):
             print "Error receiving data:\n" + str(value) + ': ' + message + "\n" + repr(self.client)

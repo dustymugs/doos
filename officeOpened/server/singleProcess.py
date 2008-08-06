@@ -20,7 +20,12 @@ class singleProcess (threading.Thread):
         
         while 1:
             print 'Thread ' + str(self.threadId) + " is at the labor exchange, looking for a yob.\n"
-            dirpath, args = self.jobQueue.get(True) #block this thread's execution until it gets something from the queue
+            dirpath = self.jobQueue.get(True) #block this thread's execution until it gets something from the queue
+            
+            #read the arguments from the .args file for this ticket
+            file = open(dirpath + '.args', 'r')
+            args = file.read()
+            file.close()
             
             #if the server tells the thread to terminate gracefully
             if args == 'terminate':
@@ -28,9 +33,11 @@ class singleProcess (threading.Thread):
                 self.jobQueue.task_done()
                 break
             else:
-                ooScriptRunner.execute(dirpath, args)
+                ooScriptRunner.execute(dirpath + '.data', args)
             
             print 'Thread ' + str(self.threadId) + " GOT A YOB!  Mira: \n-----\n" + dirpath + "\nwith args:\n" + str(args) + '\n-----\n\n'
-            os.remove(dirpath) #remove the file now that we're done with it
+            #remove the file now that we're done with it
+            os.remove(dirpath + '.data') 
+            os.remove(dirpath + '.args')
             self.jobQueue.task_done() #helps the queue keep track of how many jobs are still running
         

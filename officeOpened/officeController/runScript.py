@@ -51,6 +51,7 @@ class scriptRunner:
         When done, move the folder we created to the program folder/files/output
         '''
         (junk, ticketNumber) = dirpath.rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
+        (ticketNumber, junk) = ticketNumber.rsplit('.',1) #get rid of the .data at the end
         ticketNumber = str(ticketNumber)
         os.mkdir(self.home + 'output/' + ticketNumber) #all macro output should go here
         file = open(dirpath, 'r+') #open the passed macro
