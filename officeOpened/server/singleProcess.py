@@ -3,6 +3,7 @@ import sys
 import threading
 import hashlib
 import os
+from server import officeOpenedUtils
 from officeController import runScript
 import datetime
 
@@ -35,6 +36,7 @@ class singleProcess (threading.Thread):
                 file = open(dirpath + '.args', 'r')
                 args = file.read()
                 file.close()
+                args = officeOpenedUtils.makeDictionary(args)
                 # now get the ticket number
                 (junk, ticketNumber) = dirpath.rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
                 #now write the time that the file was taken out of the queue

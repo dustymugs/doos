@@ -15,7 +15,7 @@ size = 4096
 sys.stdout.write('%')
 
 while 1:
-    args = 'Main'
+    args = 'initFunc=Main'
     # read from keyboard
     line = sys.stdin.readline()
     if line == 'busy\n':

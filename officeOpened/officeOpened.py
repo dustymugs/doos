@@ -8,6 +8,13 @@ When a client sends a job, he is assigned a ticket number which uniquely identif
 The input sent by the client is stored in homeDirectories/input/**ticket number**
 When the job processing is finished, the job is stored in homeDirectories/output/**ticket number**
 
+The protocol for any client request is this:
+
+number of bytes following the pipe|checksum of everything following the pipe|arguments::file start::fileContents
+( "::file start::" is a token )
+The arguments string coming from the client should be formatted as follows:
+    key1=value1;key2=value2;key3;key4;key5=value5  (etc)
+
 When a client requests a ticket, the system searches the output folder for the ticket as a filename and returns the file if found.
     If that file is not found, but it is found in input/, then the server responds that the job is still being processed
     if that file is not found in either folder, the server replies that the ticket id is unknown
@@ -27,6 +34,7 @@ import threading
 from Queue import Queue
 import hashlib
 from server.singleProcess import singleProcess
+from server import officeOpenedUtils
 import random
 import datetime
 
@@ -133,7 +141,8 @@ class dataGrabber(threading.Thread):
                 #find out how many bytes will be sent
                 if bytesExpected is None:  #if we still haven't determined the number of bytes to expect
                     buf = "".join(data_chunks) #in case the bytesExpected number was in another buffering, join whatever we've got
-                    i = buf.find("|")  #fields are delimited by | like so: bytesExpected|checkSum|args|data
+                    i = buf.find("|")  #fields are delimited by | like so: bytesExpected|checkSum|argString|data
+                                        #args is structred thus: "key1=value1;key2=value2;key3;key4;key5=value5"  etc
                     if i is not -1:  #if | is found, then we have the bytesExpected
                         bytesExpected = int(buf[:i])  #bytesExpected is the string from the beginning until the |
                         data_chunks = [ buf[i+1:] ]  #we probably have more than just bytesExpected in the buffer, so store that data
@@ -155,12 +164,17 @@ class dataGrabber(threading.Thread):
             if (m.hexdigest() != checksum):
                 raise Exception("Checksum failed! ")
             
-            args, data = data.split('::file start::', 1)
+            argString, data = data.split('::file start::', 1)
             
             #DEBUG: send back the checksum
             self.client.sendall( str( m.hexdigest() ) )
-            if args == 'terminate':
+            
+            #convert argString into a key-value dictionary
+            args = officeOpenedUtils.makeDictionary(argString)
+            
+            if args.has_key('terminate') and args['terminate'] is True:
                 self.server.terminate() #tell the server to shut down all threads
+            
             else:   #or else we're good to put it in the queue
                     #so dump the data to a file
                 
@@ -182,7 +196,7 @@ class dataGrabber(threading.Thread):
                 
                 #now write arguments to the handler for this command to a file
                 file = open(dirpath + '.args', 'w')
-                file.write(args)
+                file.write(argString)
                 file.close()
                 #now create a directory for the job status file status.txt to be stored
                 os.mkdir(self.home + 'files/output/' + filename)
@@ -200,7 +214,6 @@ class dataGrabber(threading.Thread):
         finally:
             #now close the connection 
             self.client.close()
-
 
 if __name__ == "__main__":
     s = Server()

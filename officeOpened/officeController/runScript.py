@@ -43,7 +43,7 @@ class scriptRunner:
         print 'Murthering ' + str(self.childOffice.pid) + '\n'
         os.kill (self.childOffice.pid, signal.SIGTERM)
     
-    def execute(self, dirpath, initFunc):
+    def execute(self, dirpath, args):
         '''
         Create a folder in this thread's home directory/output named after the ticket number of the current job.  This folder will contain 
             any output files produced by the macro.  Search through the macro file and replace any instances of <<OUTDIR>> with the place
@@ -53,6 +53,10 @@ class scriptRunner:
         '''
         (junk, ticketNumber) = dirpath.rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
         ticketNumber = str(ticketNumber)
+        
+        if not args.has_key('initFunc'):
+            raise Exception( "initFunc was not defined by client for ticket " + ticketNumber + "\n" )
+        
         dirpath += '.data' #add .data to the end of the ticket number to get the macro's filename
         os.mkdir(self.home + 'output/' + ticketNumber) #all macro output should go here
         file = open(dirpath, 'r+') #open the passed macro
@@ -81,7 +85,7 @@ class scriptRunner:
         properties = tuple(properties)
 
         self.dispatchHelper.executeDispatch(self.desktop, 'macro:///AutoOOo.OOoCore.runScript(' + dirpath + ',' \
-                                             + initFunc + ')', "", 0, properties) 
+                                             + args["initFunc"] + ')', "", 0, properties) 
         print 'executed dispatch\n'
         
         # As quoted from the PyUno tutorial:
