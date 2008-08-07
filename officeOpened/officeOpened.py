@@ -155,14 +155,14 @@ class dataGrabber(threading.Thread):
             if (m.hexdigest() != checksum):
                 raise Exception("Checksum failed! ")
             
+            args, data = data.split('::file start::', 1)
+            
             #DEBUG: send back the checksum
             self.client.sendall( str( m.hexdigest() ) )
-            if data == 'terminate':
+            if args == 'terminate':
                 self.server.terminate() #tell the server to shut down all threads
             else:   #or else we're good to put it in the queue
                     #so dump the data to a file
-                
-                args, data = data.split('::file start::', 1)
                 
                 #if the file already exists, keep generating a random filename until an available one is found
                 #keep checking the output folder too because this filename will be the unique ticket number, and

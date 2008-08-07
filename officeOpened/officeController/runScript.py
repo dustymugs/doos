@@ -95,7 +95,7 @@ class scriptRunner:
         
         #We're done with the macro.  Now try to zip the file. 
         try:
-            absoluteRoot = self.home + 'output/' + ticketNumber + '/'
+            absoluteRoot = self.home + 'output/' + ticketNumber
             zip = ZipFile(self.home + 'output/' + ticketNumber + '.zip', 'w')
             for root, dirs, files in os.walk(self.home + 'output/' + ticketNumber):
                 for filename in files:
