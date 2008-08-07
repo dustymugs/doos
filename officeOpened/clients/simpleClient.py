@@ -26,12 +26,12 @@ while 1:
         file = open('/home/clint/OOo/sample.script')
         line = args + '::file start::' + file.read()
         file.close()
-    elif line == 'terminate\n':
-        line = 'terminate::file start::'
-    elif line == '':
+    elif line == '\n':
         break
-    else:
-        line = args + '::file start::' + line[:-1] #strip out that last \n
+    else: #for sending raw commands
+        line += '::file start::'
+    #else:
+    #    line = args + '::file start::' + line[:-1] #strip out that last \n
         
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host,port))

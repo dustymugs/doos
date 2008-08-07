@@ -162,18 +162,21 @@ class dataGrabber(threading.Thread):
             m = hashlib.sha1()
             m.update(data)
             if (m.hexdigest() != checksum):
-                raise Exception("Checksum failed! ")
+                try:
+                    self.client.sendall( "Checksum failed!" )
+                finally:
+                    raise Exception("Checksum failed! ")
             
             argString, data = data.split('::file start::', 1)
-            
-            #DEBUG: send back the checksum
-            self.client.sendall( str( m.hexdigest() ) )
             
             #convert argString into a key-value dictionary
             args = officeOpenedUtils.makeDictionary(argString)
             
             if args.has_key('terminate') and args['terminate'] is True:
-                self.server.terminate() #tell the server to shut down all threads
+                try:
+                    self.client.sendall( "shutting down...\n" )
+                finally:
+                    self.server.terminate() #tell the server to shut down all threads
             
             else:   #or else we're good to put it in the queue
                     #so dump the data to a file
@@ -205,10 +208,11 @@ class dataGrabber(threading.Thread):
                 file.write('timeEntered:' + datetime.datetime.utcnow().isoformat())
                 file.close()
                 #finally, put the data into the queue
-                self.server.jobQueue.put( dirpath, True ) 
+                self.server.jobQueue.put( dirpath, True )
+                self.client.sendall( "transmission ok\nticket number:" + filename + "\n")
             
         except socket.error, (message):
-            print "Error receiving data:\n" + str(message) + "\n"
+            print "Socket error:\n" + str(message) + "\n"
         except Exception, (message):
             print message
         finally:
