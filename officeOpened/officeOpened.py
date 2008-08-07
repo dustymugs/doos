@@ -22,11 +22,13 @@ TODO: fix exception handling with socket events
 import select
 import socket
 import sys
-from os import path
+import os
 import threading
 from Queue import Queue
 import hashlib
 from server.singleProcess import singleProcess
+import random
+import datetime
 
 class Server:
     def __init__(self):
@@ -103,7 +105,7 @@ class Server:
         # close all threads
         self.server.close()
         for c in self.singleProcesses:
-            self.jobQueue.put( (None, 'terminate'), True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
+            self.jobQueue.put( 'terminate', True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
         self.jobQueue.join()
 
 
@@ -161,16 +163,16 @@ class dataGrabber(threading.Thread):
                     #so dump the data to a file
                 
                 args, data = data.split('::file start::', 1)
-                filename = str(checksum)  #whose filename is the data's checksum
                 
                 #if the file already exists, keep generating a random filename until an available one is found
                 #keep checking the output folder too because this filename will be the unique ticket number, and
                 #if there's a file there, that ticket is in the system (and waiting for some client to come claim it)
-                while path.exists(self.home + 'files/input/' + filename + '.data') \
-                        or path.exists(self.home + 'files/output/' + filename + '.data'):
-                    import random
-                    randgen = random.Random()
-                    randgen.seed()
+                randgen = random.Random()
+                randgen.seed()
+                filename = str( randgen.randint(0,15999999) )
+                
+                while os.path.exists(self.home + 'files/input/' + filename + '.data') \
+                        or os.path.exists(self.home + 'files/output/' + filename):
                     filename = str( randgen.randint(0,15999999) )
                 #path to the input file
                 dirpath = self.home + 'files/input/' + filename
@@ -182,11 +184,17 @@ class dataGrabber(threading.Thread):
                 file = open(dirpath + '.args', 'w')
                 file.write(args)
                 file.close()
+                #now create a directory for the job status file status.txt to be stored
+                os.mkdir(self.home + 'files/output/' + filename)
+                file = open(self.home + 'files/output/' + filename + '/status.txt', 'w')
+                #log the date and time
+                file.write('timeEntered:' + datetime.datetime.utcnow().isoformat())
+                file.close()
                 #finally, put the data into the queue
                 self.server.jobQueue.put( dirpath, True ) 
             
-        except socket.error, (value, message):
-            print "Error receiving data:\n" + str(value) + ': ' + message + "\n" + repr(self.client)
+        except socket.error, (message):
+            print "Error receiving data:\n" + str(message) + "\n"
         except Exception, (message):
             print message
         finally:

@@ -22,6 +22,12 @@ while 1:
         file = open('/home/clint/OOo/busy.script')
         line = args + '::file start::' + file.read()
         file.close()
+    elif line == 'sample\n':
+        file = open('/home/clint/OOo/sample.script')
+        line = args + '::file start::' + file.read()
+        file.close()
+    elif line == 'terminate\n':
+        line = 'terminate::file start::'
     elif line == '':
         break
     else:

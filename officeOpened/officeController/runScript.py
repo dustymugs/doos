@@ -16,11 +16,12 @@ import uno
 from com.sun.star.beans import PropertyValue
 import os
 import signal
+from zipfile import ZipFile
 
 class scriptRunner:
-    def __init__(self, instanceId):
+    def __init__(self, instanceId, homeDir):
         self.instanceId = instanceId
-        self.home = "/home/clint/officeOpened/homeDirectories/officeOpened" + str(instanceId) + '/'
+        self.home = homeDir + "officeOpened" + str(instanceId) + '/'
         
         #create a new OpenOffice process and have it listen on a pipe
         self.childOffice = \
@@ -51,8 +52,8 @@ class scriptRunner:
         When done, move the folder we created to the program folder/files/output
         '''
         (junk, ticketNumber) = dirpath.rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
-        (ticketNumber, junk) = ticketNumber.rsplit('.',1) #get rid of the .data at the end
         ticketNumber = str(ticketNumber)
+        dirpath += '.data' #add .data to the end of the ticket number to get the macro's filename
         os.mkdir(self.home + 'output/' + ticketNumber) #all macro output should go here
         file = open(dirpath, 'r+') #open the passed macro
         #now rewrite instances of <<OUTDIR>> in the macro with the output location we want
@@ -92,8 +93,22 @@ class scriptRunner:
         # I do this here by calling a cheap synchronous call (getPropertyValue).
         self.ctx.ServiceManager
         
-        #We're done with the macro.  Now move the output folder into the server-wide output folder
-        os.rename(self.home + 'output/' + ticketNumber, self.home + '../files/output/' + ticketNumber)
+        #We're done with the macro.  Now try to zip the file. 
+        try:
+            absoluteRoot = self.home + 'output/' + ticketNumber + '/'
+            zip = ZipFile(self.home + 'output/' + ticketNumber + '.zip', 'w')
+            for root, dirs, files in os.walk(self.home + 'output/' + ticketNumber):
+                for filename in files:
+                    #find relative root for representation in the zip file
+                    (junk, relativeRoot) = root.split(absoluteRoot, 1)
+                    zip.write("/".join([root,filename]), relativeRoot + filename)
+            #if the zip was successful, move it to homeDirectories/output/ticketNumber/files.zip
+            os.rename(self.home + 'output/' + ticketNumber + '.zip', self.home + '../files/output/' + ticketNumber + '/files.zip')
+        except Exception, (message):
+            print "Error writing zip file:\n" + str(message) + "\nMoving output folder instead.\n"
+            #move the output files into the server-wide output folder, homeDirectories/output/ticketNumber/files
+            os.rename(self.home + 'output/' + ticketNumber, self.home + '../files/output/' + ticketNumber + '/files')
+            
         
         print 'done'
         
