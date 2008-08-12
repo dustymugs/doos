@@ -15,7 +15,7 @@ size = 4096
 sys.stdout.write('%')
 
 while 1:
-    args = 'initFunc=Main'
+    args = 'prepareJob;initFunc=Main'
     # read from keyboard
     line = sys.stdin.readline()
     if line == 'busy\n':
@@ -29,7 +29,7 @@ while 1:
     elif line == '\n':
         break
     else: #for sending raw commands
-        line += '::file start::'
+        line = line[:-1] + '::file start::'
     #else:
     #    line = args + '::file start::' + line[:-1] #strip out that last \n
         

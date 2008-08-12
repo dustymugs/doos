@@ -99,7 +99,7 @@ class Server:
                 
                 #a connected client has sent data for us to process
                 elif type(s) == type(self.server): #if it's not the server socket, but it is a socket,
-                    grabber = dataGrabber (s, self)  #create a thread to receive the data
+                    grabber = requestHandler (s, self)  #create a thread to handle the request
                     self.input.remove ( s ) #tell the server thread to stop looking for input on this socket
                     grabber.start()
                     self.dataThreads.append( grabber )
@@ -116,8 +116,11 @@ class Server:
             self.jobQueue.put( 'terminate', True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
         self.jobQueue.join()
 
-
-class dataGrabber(threading.Thread):
+#this is an enumeration for the status of jobs
+class jobStatus:
+    notFound, error, enqueued, dequeued, done = range(5)
+    
+class requestHandler(threading.Thread):
     def __init__(self,client, server):
         threading.Thread.__init__(self)
         self.client = client
@@ -172,45 +175,30 @@ class dataGrabber(threading.Thread):
             #convert argString into a key-value dictionary
             args = officeOpenedUtils.makeDictionary(argString)
             
-            if args.has_key('terminate') and args['terminate'] is True:
+            if args.has_key('terminate') and args['terminate']: #guard against "terminate=false"
                 try:
                     self.client.sendall( "shutting down...\n" )
                 finally:
                     self.server.terminate() #tell the server to shut down all threads
             
-            else:   #or else we're good to put it in the queue
-                    #so dump the data to a file
-                
-                #if the file already exists, keep generating a random filename until an available one is found
-                #keep checking the output folder too because this filename will be the unique ticket number, and
-                #if there's a file there, that ticket is in the system (and waiting for some client to come claim it)
-                randgen = random.Random()
-                randgen.seed()
-                filename = str( randgen.randint(0,15999999) )
-                
-                while os.path.exists(self.home + 'files/input/' + filename + '.data') \
-                        or os.path.exists(self.home + 'files/output/' + filename):
-                    filename = str( randgen.randint(0,15999999) )
-                #path to the input file
-                dirpath = self.home + 'files/input/' + filename
-                file = open(dirpath + '.data', 'w')
-                file.write( data ) #save the data
-                file.close()
-                
-                #now write arguments to the handler for this command to a file
-                file = open(dirpath + '.args', 'w')
-                file.write(argString)
-                file.close()
-                #now create a directory for the job status file status.txt to be stored
-                os.mkdir(self.home + 'files/output/' + filename)
-                file = open(self.home + 'files/output/' + filename + '/status.txt', 'w')
-                #log the date and time
-                file.write('timeEntered:' + datetime.datetime.utcnow().isoformat())
-                file.close()
-                #finally, put the data into the queue
-                self.server.jobQueue.put( dirpath, True )
-                self.client.sendall( "transmission ok\nticket number:" + filename + "\n")
+            #if they want to put it in the queue, dump the data to a file
+            elif args.has_key('prepareJob') and args['prepareJob'] is True:   
+                self.prepareJob(argString, data)
             
+            #if they want status or they want the job    
+            elif ( (args.has_key('stat') and args['stat']) or (args.has_key('returnJob') and args['returnJob']) ) and args.has_key('ticket'):
+                logfile, status = self.stat(args['ticket'])
+                
+                if status == jobStatus.notFound:
+                    self.client.sendall( "STATUS " + str(status) + ": " + str(logfile) )
+                elif (args.has_key('returnJob') and args['returnJob']) and status == jobStatus.done:
+                    self.returnJob( args['ticket'] )
+                else:
+                    self.client.sendall(logfile)
+            else:
+                self.client.sendall("STATUS " + jobStatus.error + ": Unknown command\n")
+                
+                
         except socket.error, (message):
             print "Socket error:\n" + str(message) + "\n"
         except Exception, (message):
@@ -218,7 +206,111 @@ class dataGrabber(threading.Thread):
         finally:
             #now close the connection 
             self.client.close()
-
+    
+    def returnJob(self, ticket):
+        '''
+        Send the completed job back to the client.  First look for files.zip, and if that
+        doesn't exist look for the folder "files" and send its contents.
+        data is stored as follows: [ (filename, data) ]
+        '''
+        isZip = None #start off assuming that zipping the output didn't work
+        try:
+            file = open(self.home + "files/output/" + ticket + "/files.zip")
+            data = [ ('files.zip', file.read()) ]
+            file.close()
+            isZip = True
+        except IOError, (value, message): 
+            #if the file is not found, the ticket doesn't exist.
+            #zipping the output probably failed, meaning we probably have a HUGE file/set of files
+            #Either that, or there was some unknown IO error.
+            #Now we're going to try to read all of the files and load them
+            #into data.
+            try:
+                data = []
+                absoluteRoot = self.home + 'files/output/' + ticket + '/files/'
+                for root, dirs, files in os.walk(self.home + 'files/output/' + ticket + '/files/'):
+                    for filename in files:
+                        #find relative root for the file's path
+                        (junk, relativeRoot) = root.split(absoluteRoot, 1)
+                        file = open(relativeRoot + filename)
+                        data.append( (relativeRoot + filename, file.read()) )
+                        file.close()
+                isZip = False #mark that the output is a number of files, not just a single zip file
+                
+            #if we couldn't read all of the files
+            except Exception, (message):
+                try:
+                    self.client.sendall('STATUS ' + str(jobStatus.error) + ": " + message)
+                except Exception (message):
+                    print "Unknown Error: " + message
+        
+        except socket.error, (message):
+            print "Socket Error: " + message
+        except Exception, (message):
+            print "Unknown Error: " + message
+        
+        #So now we have the data (or failure).  Let's send the data back to the client.
+        try:
+            if isZip is not None:
+                for file in data:
+                    self.client.sendall( file[0] + "::file start::" + file[1] + "::fileEnd")
+        except socket.error, (message):
+            print "Socket Error: " + message
+        except Exception, (message):
+            print "Unknown Error: " + message
+    
+    def stat(self, ticket):
+        try:
+            file = open(self.home + "files/output/" + ticket + "/status.txt")
+            logfile = file.read()
+            file.close()
+        except IOError, (value, message): #if the file is not found, the ticket doesn't exist.
+            if value == 2:
+                return "Ticket not found.\n", jobStatus.notFound
+            else:
+                return message, jobStatus.error
+        except Exception, (message):
+            return "Unknown Error: " + message, jobStatus.error
+            
+        if logfile.find('timeCompleted:') >= 0:
+            return logfile, jobStatus.done
+        elif logfile.find('timeDequeued:') >= 0:
+            return logfile, jobStatus.dequeued
+        else:
+            return logfile, jobStatus.enqueued
+        
+            
+    def prepareJob(self, argString, data):
+        #if the file already exists, keep generating a random filename until an available one is found
+        #keep checking the output folder too because this filename will be the unique ticket number, and
+        #if there's a file there, that ticket is in the system (and waiting for some client to come claim it)
+        randgen = random.Random()
+        randgen.seed()
+        filename = str( randgen.randint(0,15999999) )
+        
+        while os.path.exists(self.home + 'files/input/' + filename + '.data') \
+                or os.path.exists(self.home + 'files/output/' + filename):
+            filename = str( randgen.randint(0,15999999) )
+        #path to the input file
+        dirpath = self.home + 'files/input/' + filename
+        file = open(dirpath + '.data', 'w')
+        file.write( data ) #save the data
+        file.close()
+        
+        #now write arguments to the handler for this command to a file
+        file = open(dirpath + '.args', 'w')
+        file.write(argString)
+        file.close()
+        #now create a directory for the job status file status.txt to be stored
+        os.mkdir(self.home + 'files/output/' + filename)
+        file = open(self.home + 'files/output/' + filename + '/status.txt', 'w')
+        #log the date and time
+        file.write('timeEntered:' + datetime.datetime.utcnow().isoformat())
+        file.close()
+        #finally, put the data into the queue
+        self.server.jobQueue.put( dirpath, True )
+        self.client.sendall( "transmission ok\nticket number:" + filename + "\n")
+        
 if __name__ == "__main__":
     s = Server()
     s.run() 

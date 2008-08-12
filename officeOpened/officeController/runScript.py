@@ -101,7 +101,7 @@ class scriptRunner:
         try:
             absoluteRoot = self.home + 'output/' + ticketNumber
             zip = ZipFile(self.home + 'output/' + ticketNumber + '.zip', 'w')
-            for root, dirs, files in os.walk(self.home + 'output/' + ticketNumber):
+            for root, dirs, files in os.walk(absoluteRoot):
                 for filename in files:
                     #find relative root for representation in the zip file
                     (junk, relativeRoot) = root.split(absoluteRoot, 1)
