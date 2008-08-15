@@ -16,7 +16,7 @@ import uno
 from com.sun.star.beans import PropertyValue
 import os
 import shutil
-from zipfile import ZipFile
+import zipfile
 
 class scriptRunner:
     def __init__(self, instanceId, homeDir, restartedJob):
@@ -115,7 +115,7 @@ class scriptRunner:
         #We're done with the macro.  Now try to zip the file. 
         try:
             absoluteRoot = self.home + 'output/' + ticketNumber
-            zip = ZipFile(self.home + 'output/' + ticketNumber + '.zip', 'w')
+            zip = zipfile.ZipFile(self.home + 'output/' + ticketNumber + '.zip', 'w', zipfile.ZIP_DEFLATED, True)
             for root, dirs, files in os.walk(absoluteRoot):
                 for filename in files:
                     #find relative root for representation in the zip file
