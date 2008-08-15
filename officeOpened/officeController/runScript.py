@@ -15,21 +15,35 @@ import time
 import uno
 from com.sun.star.beans import PropertyValue
 import os
-import signal
+import shutil
 from zipfile import ZipFile
 
 class scriptRunner:
-    def __init__(self, instanceId, homeDir):
+    def __init__(self, instanceId, homeDir, restartedJob):
         self.instanceId = instanceId
         self.home = homeDir + "officeOpened" + str(instanceId) + '/'
+        self.shuttingDown = False
         
         #create a new OpenOffice process and have it listen on a pipe
         self.childOffice = \
-            subprocess.Popen( ('soffice', "-accept=pipe,name=officeOpened" + str(instanceId) + ";urp;", "-headless", "-nofirststartwizard"), 
+            subprocess.Popen( ('soffice', "-accept=pipe,name=officeOpenedPipe" + str(instanceId) + ";urp;", "-headless", "-nofirststartwizard"), 
                                                                             env={ "PATH": os.environ["PATH"], 
                                                                             "HOME": self.home } ) #we need to have several 'homes' to have
                                                                                                     #several OO instances running
-        time.sleep(10.0)
+        time.sleep(0.5)
+        
+        #OOo spawns a child process which we'll have to look out for.
+        #now get the child process which has been spawned (need to kill -9 it in case anything goes wrong)
+        print "about to look for children of thread " + str(self.instanceId) + " with ppid= " + str(self.childOffice.pid) + "\n"
+        ps = subprocess.Popen(("ps", "--no-headers", "--ppid", str(self.childOffice.pid), "o", "pid"), \
+                                        env={ "PATH": os.environ["PATH"]}, stdout=subprocess.PIPE)
+        self.grandchildren = []
+        psOutput = ps.communicate()[0]
+        for child in psOutput.split("\n")[:-1]: #the last element will be '' so drop it
+            self.grandchildren.append(child.lstrip()) #needs to be a string rather than an int. Remove leading whitespace.
+            
+        print "done looking for children of thread " + str(self.instanceId) + ", found: '" + str(self.grandchildren) + "'\n\n"
+
         
         # get the uno component context from the PyUNO runtime
         localContext = uno.getComponentContext()
@@ -38,10 +52,11 @@ class scriptRunner:
         self.resolver = localContext.ServiceManager.createInstanceWithContext(
                         "com.sun.star.bridge.UnoUrlResolver", localContext )
         
-        
-    def __del__(self):
-        print 'Murthering ' + str(self.childOffice.pid) + '\n'
-        os.kill (self.childOffice.pid, signal.SIGTERM)
+    def getPIDs(self):
+        '''
+        Returns string representations of the PIDs OpenOffice instance spawned by this thread and any direct children that instance may have.
+        '''
+        return [str(self.childOffice.pid)] + self.grandchildren
     
     def execute(self, dirpath, args):
         '''
@@ -67,7 +82,7 @@ class scriptRunner:
         file.close()
         
         # connect to the running office
-        self.ctx = self.resolver.resolve( "uno:pipe,name=officeOpened" + str(self.instanceId) + ";urp;StarOffice.ComponentContext" )
+        self.ctx = self.resolver.resolve( "uno:pipe,name=officeOpenedPipe" + str(self.instanceId) + ";urp;StarOffice.ComponentContext" )
         print 'connected\n'
         
         # get the central desktop object
@@ -107,14 +122,15 @@ class scriptRunner:
                     (junk, relativeRoot) = root.split(absoluteRoot, 1)
                     zip.write("/".join([root,filename]), relativeRoot + filename)
             #if the zip was successful, move it to homeDirectories/output/ticketNumber/files.zip
-            os.rename(self.home + 'output/' + ticketNumber + '.zip', self.home + '../files/output/' + ticketNumber + '/files.zip')
+            shutil.move(self.home + 'output/' + ticketNumber + '.zip', self.home + '../files/output/' + ticketNumber + '/files.zip')
         except Exception, (message):
             print "Error writing zip file:\n" + str(message) + "\nMoving output folder instead.\n"
             #move the output files into the server-wide output folder, homeDirectories/output/ticketNumber/files
-            os.rename(self.home + 'output/' + ticketNumber, self.home + '../files/output/' + ticketNumber + '/files')
-            
-        
+            shutil.move(self.home + 'output/' + ticketNumber, self.home + '../files/output/' + ticketNumber + '/files')
+
         print 'done'
+    
+    
         
         
 if __name__ == '__main__':

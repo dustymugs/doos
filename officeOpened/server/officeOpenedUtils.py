@@ -1,6 +1,12 @@
 '''
 Utility functions for officeOpened and its components
 '''
+
+import time
+import subprocess
+import os
+import signal
+
 def makeDictionary(argString):
     '''
     turn a string which was formatted like so: 
@@ -18,3 +24,100 @@ def makeDictionary(argString):
         else:
             args[ arg[0] ] = arg[1]
     return args
+
+def checkProcesses(groups):
+    '''
+    Generate a dictionary of collective CPU usage for each thread's processes
+    Expects a dictionary "groups" of the form:
+        [
+            1: ['132', '2133', '1231'],
+            2: ['34', '2435'],
+            0: ['345', '55', '345', '3455']
+        ]
+            ...where the key is the thread id according to singleProcess.py
+    
+    Returns a similar dictionary, but CPU usage is given as a percentage of total CPU time, followed by associated PIDs:
+        [
+            1: ( 22, ['132', '2133', '1231'] ),
+            2: ( 12, ['34', '2435'] ),
+            0: ( 1, ['345', '55', '345', '3455'] )
+        ]
+            
+    '''
+    pidString = ""
+    threads = {}
+    ownerOf = {} #pairs a Process ID with the thread it belongs to
+    for threadId, PIDs in groups:
+        #start creating the hierarchy
+        threads[threadId] = ( 0, PIDs ) #each thread has an entry of (CPU usage, process IDs)
+        pidString += ",".join(PIDs)
+        for process in PIDs:
+            ownerOf[process] = threadId
+        
+    #output the PID and CPU usage of the processes in threadString
+    ps = subprocess.Popen(("ps", "S", "--no-headers", "o", "pid,pcpu", "--pid", pidString), stdout=subprocess.PIPE)
+    processStrings = ps.communicate()[0].split("\n") #make a list of strings with PID and CPU usage
+    
+    #now run through the result of ps and add each process's cpu usage to its thread's total
+    for process in processStrings:
+        pid, cpu =  process.split(None, 2)
+        pid = pid.lstrip() #get rid of leading whitespace
+        threads[ ownerOf[pid] ]  [0] += cpu #adds to the cpu usage of that PID's thread
+        
+    return threads;
+
+def kill(drunkards):
+    '''
+    Kill the passed processes in the same way that people at Froggy's deal with drunkards at closing time:
+        Politely ask the drunkard to leave by giving him SIGTERM, and assume that he'll have the good graces
+            to take his clique with him.
+        Give him 3 seconds to get out
+        If he's still there after three seconds, kill him and his little friends with SIGKILL
+        
+    Expects a list of threads whose processes are to be killed, with the parent process id at the head of each list:
+        [
+            [ "2300", "2321", "3424" ],  #2300 is the parent process id of this thread
+            [ "864", "8668", "3838" ],    #864 is the parent process id of this thread
+            [ "483", "4383", "3483" ]    #483 is the parent process id of this thread
+        ]
+    '''
+    checkList = [] #this list will be join()'d and passed to ps as the PIDs to investigate
+    for clique in drunkards:
+        drunkard = clique[0] #the first member of each list is the parent process
+        print "SIGTERM:\t" + drunkard + "\n"
+        try:
+            checkList.append(drunkard)
+            os.kill ( int(drunkard), signal.SIGTERM ) #politely ask the drunkard to leave and take his friends with him
+        except OSError, (value, message):
+            if value == 3: #the drunkard has already left
+                print "Notice: process " + drunkard + " is already dead.\n"
+                checkList.remove(drunkard) #if he's already gone, scratch him off your list
+            else:
+                print "Unknown OSError while attempting to shutdown process " + drunkard + ": " + message + "\n"
+        except Exception, (message):
+            print "Unknown exception while attempting to shutdown process " + drunkard + ": " + str(message) + "\n"
+        finally:
+            checkList += clique[1:]
+            
+    print "\n"
+    
+    #now give them 3 seconds to get out
+    time.sleep(3)
+    
+    #check to see if any drunkards are still lingering (by running ps and passing it the list of process IDs)
+    ps = subprocess.Popen( ("ps", "--no-headers", "o", "pid", "--pid", ",".join(checkList) ), stdout=subprocess.PIPE)
+    lingeringDrunkards = ps.communicate()[0].split("\n") #make a list of PIDs which are still alive
+    
+    for drunkard in lingeringDrunkards[:-1]: #the last item of lingeringDrunkards = ''
+        print "SIGKILL:\t" + drunkard + "\n"
+        try:
+            os.kill ( int(drunkard), signal.SIGTERM ) #politely ask the drunkard to leave
+        except OSError, (value, message):
+            if value == 3: #the drunkard has already left
+                print "Notice: process " + drunkard + " is already dead; no SIGKILL necessary.\n"
+            else:
+                print "Unknown OSError while attempting to SIGKILL process " + drunkard + ": " + message + "\n"
+        except Exception, (message):
+            print "Unknown exception while attempting to SIGKILL process " + drunkard + ": " + str(message) + "\n"
+            
+    print "\n"

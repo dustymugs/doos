@@ -20,10 +20,20 @@ When a client requests a ticket, the system searches the output folder for the t
     if that file is not found in either folder, the server replies that the ticket id is unknown
 """
 '''
-TODO: fix exception handling with socket events
+TODO: 
+    Fix exception handling with socket events
+    If you restart a server, you'll get "Could not start up, socket in use" which skips killing everyone and quits.  Kill everyone first.
     On server startup, check files/input for any files, and run those first.  Those are files which were processing when the server died.
         Clients may be looking for them.
     Kill everyone who ignores SIGTERM
+    Remove output after it's been retrieved, or add a deletion function that clients can call after retrieval
+    Make sure that <<defunct>> processes don't display weirdly with this usage of ps
+    os.waitpid() isn't catching murdered processes.  Find out why.
+    
+    ZOMBIES:
+        wait() for murthered processes to finish.
+        Create a signal handler for children that die and reap their souls
+        Does killing still send SIGCHLD?
     
 '''
 import select
@@ -39,7 +49,7 @@ import random
 import datetime
 
 class Server:
-    def __init__(self):
+    def __init__(self, numSingleProcesses=4):
         self.host = '' #socket.getsockname()
         self.port = 8568
         self.backlog = 100 #the maximum number of waiting socket connections
@@ -47,16 +57,16 @@ class Server:
         self.server = None
         self.jobQueue = Queue()
         self.outputQueue = Queue()
-        self.dataThreads = []
         self.singleProcesses = []
         self.running = True
         self.input = []
+        self.watchdog = watchdog(interval=5, timeout=60)
         
         #Create numsingleProcesses singleProcess's, indexed by an id.
-        numsingleProcesses = 4
-        for i in range(numsingleProcesses):
-            self.singleProcesses.append( singleProcess(i, self.jobQueue, self) )
+        for i in range(numSingleProcesses):
+            self.singleProcesses.append( singleProcess(i, self.jobQueue, self.watchdog) )
             self.singleProcesses[i].start()
+            #self.watchdog.threads[i] = 
 
 
     def open_socket(self):
@@ -102,7 +112,6 @@ class Server:
                     grabber = requestHandler (s, self)  #create a thread to handle the request
                     self.input.remove ( s ) #tell the server thread to stop looking for input on this socket
                     grabber.start()
-                    self.dataThreads.append( grabber )
 
                 elif s == sys.stdin:
                     # handle standard input
@@ -115,6 +124,47 @@ class Server:
         for c in self.singleProcesses:
             self.jobQueue.put( 'terminate', True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
         self.jobQueue.join()
+
+class watchdog(threading.Thread):
+    '''
+    This thread checks every *interval* seconds (usually 5 seconds) to make sure of the following:
+    
+        Are the threads which have jobs are still using CPU time? Or if they are, has the job been running for less time than the timeout?
+        If not:
+            kill the thread (if it even exists)
+            log the error in output/ticket/status.txt
+            if the job has died before:
+                Restart the thread with job it died on.
+            else:
+                log a fatal error in status.txt
+        Are the processes still alive?
+            If not, start them up again
+            
+    self.threads is of the form [ [parent, child, child], [parent], [parent, child] ]  (etc.)
+    
+    TODO: handle dying children
+    '''
+    def __init__(self, interval=5, timeout=30):
+        self.interval = interval
+        self.timeout = timeout
+        self.threads = {} #the threads being watched over.  Not linking to server.threads because we don't want circular references
+        self.threadMutex = threading.Lock()
+        self.running = True
+        self.allChildrenReaped = False #this is for the main thread's wait() loop. When all children have been reaped, this will be True
+        
+    def run(self):
+        while self.running:
+            time.sleep(interval)
+            
+            #need to acquire a lock here for the threads list since hatching and dying threads can modify this list
+            self.threadMutex.acquire()
+            processes = officeOpenedUtils.checkProcesses( self.threads )
+            self.threadMutex.release()
+            
+        threads = None #now that we're done running, break the possibility of a circular reference
+            
+            
+
 
 #this is an enumeration for the status of jobs
 class jobStatus:
@@ -181,13 +231,13 @@ class requestHandler(threading.Thread):
                 finally:
                     self.server.terminate() #tell the server to shut down all threads
             
-            #if they want to put it in the queue, dump the data to a file
+            #if they want to put it in the queue, dump the data to a file and enqueue
             elif args.has_key('prepareJob') and args['prepareJob'] is True:   
                 self.prepareJob(argString, data)
             
             #if they want status or they want the job    
             elif ( (args.has_key('stat') and args['stat']) or (args.has_key('returnJob') and args['returnJob']) ) and args.has_key('ticket'):
-                logfile, status = self.stat(args['ticket'])
+                logfile, status = self.stat(args['ticket']) #get the file containing the job's status
                 
                 if status == jobStatus.notFound:
                     self.client.sendall( "STATUS " + str(status) + ": " + str(logfile) )
@@ -313,4 +363,18 @@ class requestHandler(threading.Thread):
         
 if __name__ == "__main__":
     s = Server()
-    s.run() 
+    s.run()
+    #only the main thread can catch signals.  Handle dying children.
+    #this loop's condition will be tested on init or when all of the children have died, be it because the server's shutting down
+    #or because all child processes have crashed and none have yet been restarted
+    #while s.watchdog.allChildrenReaped is False:
+    #os.waitpid will throw an OSError exception when this process has no children
+    try:
+        while True:
+            pid, exit = os.waitpid(-1, os.WUNTRACED)
+            print "Child " + str(pid) + " has died.  So it goes.\n"
+            #TODO: notify watchdog that this child has died.
+    except OSError, (value, message):
+        if value is not 10:
+            raise OSError(value, message)
+    

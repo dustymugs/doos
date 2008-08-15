@@ -3,6 +3,7 @@ import sys
 import threading
 import hashlib
 import os
+import signal
 from server import officeOpenedUtils
 from officeController import runScript
 import datetime
@@ -13,15 +14,15 @@ home = '/home/clint/officeOpened/homeDirectories/'
 
 #officeInstance inherits from Thread
 class singleProcess (threading.Thread):
-    def __init__(self, threadNumber, jobQueue, server):
+    def __init__(self, threadNumber, jobQueue, watchdog):
         threading.Thread.__init__(self)
-        self.server =  server  #doesn't need to be in self.data because the same dispatcher is used by all threads
         self.threadId = threadNumber
         self.jobQueue = jobQueue
+        self.ooScriptRunner = runScript.scriptRunner(self.threadId, home, watchdog)
+        self.watchdog = watchdog
     
     def run(self):
-        ooScriptRunner = runScript.scriptRunner(self.threadId, home)
-        
+
         while 1:
             print 'Thread ' + str(self.threadId) + " is at the labor exchange, looking for a yob.\n"
             dirpath = self.jobQueue.get(True) #block this thread's execution until it gets something from the queue
@@ -30,6 +31,7 @@ class singleProcess (threading.Thread):
             if dirpath == 'terminate':
                 print 'Thread ' + str(self.threadId) + ' exiting gracefully...\n'
                 self.jobQueue.task_done()
+                self.clear()
                 break
             else:
                 #read the arguments from the .args file for this ticket
@@ -44,7 +46,7 @@ class singleProcess (threading.Thread):
                 file.write('\ntimeDequeued:' + datetime.datetime.utcnow().isoformat())
                 file.close()
                 #execution stage
-                ooScriptRunner.execute(dirpath, args)
+                self.ooScriptRunner.execute(dirpath, args)
                 #write the job's status to status.txt now that it's done
                 file = open(home + 'files/output/' + str(ticketNumber) + '/status.txt', 'a')
                 file.write('\ntimeCompleted:' + datetime.datetime.utcnow().isoformat())
@@ -52,7 +54,24 @@ class singleProcess (threading.Thread):
                 #remove the file now that we're done with it
                 os.remove(dirpath + '.data') 
                 os.remove(dirpath + '.args')
-            print 'Thread ' + str(self.threadId) + " GOT A YOB!  Mira: \n-----\n" + dirpath + "\nwith args:\n" + str(args) + '\n-----\n\n'
             
             self.jobQueue.task_done() #helps the queue keep track of how many jobs are still running
+ 
+    def getPIDs(self):
+        '''
+        Returns a list of strings of the process id of the parent process spawned by the thread followed by those of any 
+        child processes spawned by that process.  Like so:
+        ["123", "4325", "2342"]
+        '''
+        return self.ooScriptRunner.getPIDs()
+    
+    def clear(self):
+        '''
+        Pre-destructor code to break circular references between the watchdog and the thread
+        '''
+        #get the PIDs of the processes associated with this thread
+        pids = self.getPIDs()
+        #and kill them all
+        officeOpenedUtils.kill([pids])
         
+        self.watchdog = None
