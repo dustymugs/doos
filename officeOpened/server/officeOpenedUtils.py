@@ -25,7 +25,7 @@ def makeDictionary(argString):
             args[ arg[0] ] = arg[1]
     return args
 
-def checkProcesses(groups):
+def checkProcesses(groups, waitMutex):
     '''
     Generate a dictionary of collective CPU usage for each thread's processes
     Expects a dictionary "groups" of the form:
@@ -38,35 +38,43 @@ def checkProcesses(groups):
     
     Returns a similar dictionary, but CPU usage is given as a percentage of total CPU time, followed by associated PIDs:
         [
-            1: ( 22, ['132', '2133', '1231'] ),
-            2: ( 12, ['34', '2435'] ),
-            0: ( 1, ['345', '55', '345', '3455'] )
+            1: [ 22, ['132', '2133', '1231'] ],
+            2: [ 12, ['34', '2435'] ],
+            0: [ 1, ['345', '55', '345', '3455'] ]
         ]
             
     '''
     pidString = ""
     threads = {}
     ownerOf = {} #pairs a Process ID with the thread it belongs to
-    for threadId, PIDs in groups:
+    
+    for threadId in groups.keys():
+        PIDs = groups[threadId]
         #start creating the hierarchy
-        threads[threadId] = ( 0, PIDs ) #each thread has an entry of (CPU usage, process IDs)
-        pidString += ",".join(PIDs)
+        threads[threadId] = [ 0.0, PIDs ] #each thread has an entry of (CPU usage, process IDs)
+        pidString += ",".join(PIDs) + ','
         for process in PIDs:
             ownerOf[process] = threadId
+            
+    pidString = pidString[:-1] #remove that trailing ','
         
+    #acquire the right to wait
+    waitMutex.acquire()
     #output the PID and CPU usage of the processes in threadString
     ps = subprocess.Popen(("ps", "S", "--no-headers", "o", "pid,pcpu", "--pid", pidString), stdout=subprocess.PIPE)
     processStrings = ps.communicate()[0].split("\n") #make a list of strings with PID and CPU usage
+    #release the wait mutex
+    waitMutex.release()
     
     #now run through the result of ps and add each process's cpu usage to its thread's total
-    for process in processStrings:
+    for process in processStrings[:-1]: #the last item of processStrings will be '' so drop it
         pid, cpu =  process.split(None, 2)
         pid = pid.lstrip() #get rid of leading whitespace
-        threads[ ownerOf[pid] ]  [0] += cpu #adds to the cpu usage of that PID's thread
+        threads[ ownerOf[pid] ]  [0] += float(cpu) #adds to the cpu usage of that PID's thread
         
     return threads;
 
-def kill(drunkards):
+def kill(drunkards, waitMutex):
     '''
     Kill the passed processes in the same way that people at Froggy's deal with drunkards at closing time:
         Politely ask the drunkard to leave by giving him SIGTERM, and assume that he'll have the good graces
@@ -104,9 +112,13 @@ def kill(drunkards):
     #now give them 3 seconds to get out
     time.sleep(3)
     
+    #acquire the right to call wait()
+    waitMutex.acquire()
     #check to see if any drunkards are still lingering (by running ps and passing it the list of process IDs)
     ps = subprocess.Popen( ("ps", "--no-headers", "o", "pid", "--pid", ",".join(checkList) ), stdout=subprocess.PIPE)
     lingeringDrunkards = ps.communicate()[0].split("\n") #make a list of PIDs which are still alive
+    #release the wait mutex
+    waitMutex.release()
     
     for drunkard in lingeringDrunkards[:-1]: #the last item of lingeringDrunkards = ''
         print "SIGKILL:\t" + drunkard + "\n"

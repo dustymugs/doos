@@ -47,6 +47,7 @@ from server.singleProcess import singleProcess
 from server import officeOpenedUtils
 import random
 import datetime
+import time
 
 class Server:
     def __init__(self, numSingleProcesses=4):
@@ -57,73 +58,119 @@ class Server:
         self.server = None
         self.jobQueue = Queue()
         self.outputQueue = Queue()
-        self.singleProcesses = []
+        self.singleProcesses = {}
         self.running = True
         self.input = []
-        self.watchdog = watchdog(interval=5, timeout=60)
+        self.watchdog = watchdog(self, interval=5, timeout=60)
+        self.waitMutex = threading.Lock()
+        self.serverSocketTimeout = 30
         
         #Create numsingleProcesses singleProcess's, indexed by an id.
         for i in range(numSingleProcesses):
-            self.singleProcesses.append( singleProcess(i, self.jobQueue, self.watchdog) )
+            i = str(i)
+            self.singleProcesses[i] = singleProcess( i, self.jobQueue, self.watchdog, self.waitMutex )
             self.singleProcesses[i].start()
-            #self.watchdog.threads[i] = 
-
-
-    def open_socket(self):
-        try:
-            self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server.bind((self.host,self.port))
-            self.server.listen(self.backlog)
-        except socket.error, (value,message):
-            if self.server:
-                self.server.close()
-            print "Could not open socket: " + message
-            sys.exit(1)
+            self.watchdog.addThread( i, self.singleProcesses[i].getPIDs() )
+            
+        self.watchdog.start()
             
     def terminate(self):
         self.running = False
 
     def run(self):
-        self.open_socket()
-        #start the singleProcess threads
-        self.input = [self.server,sys.stdin]
-        running = 1
-        while self.running:
-            #choose among the input sources which are ready to give data.  Choosing between stdin, the server socket, and established client connections
-            inputready,outputready,exceptready = select.select(self.input,[],[])
-            
-            for s in inputready:
-                #print 'Got input: ' + str(s) + '\n'
-                if not running:
+        while True:
+            try:
+                self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.server.bind((self.host,self.port))
+                self.server.listen(self.backlog)
+                break
+            except socket.error, (value, message):
+                if self.serverSocketTimeout > 0:
+                    print "Socket error. Retrying in 2 seconds...\n"
+                    time.sleep(2)
+                    self.serverSocketTimeout -= 2
+                else:
+                    print "Could not open server listening socket: Connection attempts timed out.\n"
+                    self.server = None
                     break
-                    
-                elif s == self.server:
-                    # handle the server socket (for when someone is trying to connect)
-                    try:
-                        client, address = self.server.accept()
-                        self.input.append(client)
-                        client.setblocking(0)
-                    except socket.error, (value, message):
-                        #do nothing--we've probably just connected without the client having sent any data
-                        print 'Error connecting to client:\n' + str(value) + "\n" + message
+            except Exception, (message):
+                print "Could not open server listening socket: " + str(message) + "\n"
+                break
+        
+        if self.server is not None:        
+            #start the singleProcess threads
+            self.input = [self.server,sys.stdin]
+            running = 1
+            while self.running:
+                #choose among the input sources which are ready to give data.  Choosing between stdin, the server socket, and established client connections
+                inputready,outputready,exceptready = select.select(self.input,[],[])
                 
-                #a connected client has sent data for us to process
-                elif type(s) == type(self.server): #if it's not the server socket, but it is a socket,
-                    grabber = requestHandler (s, self)  #create a thread to handle the request
-                    self.input.remove ( s ) #tell the server thread to stop looking for input on this socket
-                    grabber.start()
-
-                elif s == sys.stdin:
-                    # handle standard input
-                    junk = sys.stdin.readline()
-                    self.running = 0
-
+                for s in inputready:
+                    #print 'Got input: ' + str(s) + '\n'
+                    if not running:
+                        break
+                        
+                    elif s == self.server:
+                        # handle the server socket (for when someone is trying to connect)
+                        try:
+                            client, address = self.server.accept()
+                            self.input.append(client)
+                            client.setblocking(0)
+                        except socket.error, (value, message):
+                            #do nothing--we've probably just connected without the client having sent any data
+                            print 'Error connecting to client:\n' + str(value) + "\n" + str(message)
+                    
+                    #a connected client has sent data for us to process
+                    elif type(s) == type(self.server): #if it's not the server socket, but it is a socket,
+                        grabber = requestHandler (s, self)  #create a thread to handle the request
+                        self.input.remove ( s ) #tell the server thread to stop looking for input on this socket
+                        grabber.start()
+    
+                    elif s == sys.stdin:
+                        # handle standard input
+                        junk = sys.stdin.readline()
+                        self.running = 0
+                        
+            self.server.close()
         #exiting gracefully; allow all threads to finish before closing
         # close all threads
-        self.server.close()
         for c in self.singleProcesses:
             self.jobQueue.put( 'terminate', True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
         self.jobQueue.join()
+        #the watchdog will shut itself down when all threads have removed themselves from its list.
+
+'''class blackStork(threading.Thread):
+    ''
+    This thread waits for our children to die and takes them back to the Source (reaps them).
+    ''
+    def __init__(self, watchdog):
+        threading.Thread.__init__(self, name="blackStork")
+        self.watchdog = watchdog
+        
+    def run(self):
+        #Handle dying children.
+        #this loop's condition will be tested on init or when all of the children have died, be it because the server's shutting down
+        #or because all child processes have crashed and none have yet been restarted
+        while self.watchdog.readyToExit is False:
+            #os.waitpid will throw an OSError exception when this process has no children
+            try:
+                while True:
+                    pid, exit = os.waitpid(0, os.WUNTRACED) #await the death of any process in this process group
+                    self.watchdog.dropProcesses([str(pid)], True) #notify the watchdog that the process has died, which will then tell the thread
+                    print "Child " + str(pid) + " has died.  So it goes.\n"
+            except OSError, (value, message):
+                if value is 10: #error 10 means that there are no children to wait for
+                    #this can happen if all child processes have crashed, in which case we don't want to exit
+                    #so we must also make sure that watchdog says we're ready to exit before closing down the thread
+                    if self.watchdog.readyToExit:
+                        self.clear()
+                        break
+                else:
+                    raise OSError(value, message)
+          
+    def clear(self):
+        self.watchdog = None
+'''
 
 class watchdog(threading.Thread):
     '''
@@ -140,28 +187,142 @@ class watchdog(threading.Thread):
         Are the processes still alive?
             If not, start them up again
             
-    self.threads is of the form [ [parent, child, child], [parent], [parent, child] ]  (etc.)
+    self.threads is of the form:
+     [
+         "0": [parent, child, child], 
+         "1": [parent], 
+         "2": [parent, child] ]       
+    ]    (etc.)  where parent and child are string representations of process IDs
     
     TODO: handle dying children
     '''
-    def __init__(self, interval=5, timeout=30):
+    def __init__(self, server, interval=5, timeout=30):
+        threading.Thread.__init__(self, name="watchdog")
         self.interval = interval
         self.timeout = timeout
         self.threads = {} #the threads being watched over.  Not linking to server.threads because we don't want circular references
-        self.threadMutex = threading.Lock()
+        self.threadsMutex = threading.Lock()
         self.running = True
-        self.allChildrenReaped = False #this is for the main thread's wait() loop. When all children have been reaped, this will be True
+        self.readyToExit = False #this is for the main thread's wait() loop. When all children have been reaped, this will be True
+        self.server = server
+        #self.blackStork = blackStork(self) #the watchdog owns and controls the black stork
         
     def run(self):
-        while self.running:
-            time.sleep(interval)
+        #self.blackStork.start()
+        
+        while not self.readyToExit:
+            time.sleep(self.interval)
             
             #need to acquire a lock here for the threads list since hatching and dying threads can modify this list
-            self.threadMutex.acquire()
-            processes = officeOpenedUtils.checkProcesses( self.threads )
-            self.threadMutex.release()
+            self.threadsMutex.acquire()
             
-        threads = None #now that we're done running, break the possibility of a circular reference
+            if self.threads is {}: #then all threads have been removed and it's time to shut down
+                self.clear()
+            else:
+                processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
+                print "----------------\n" + "Watchdog sees the following process usage:\n" + str(processes) + "\n----------------\n"
+            self.threadsMutex.release()
+            
+    def clear(self):
+        self.readyToExit = True
+        self.server = None
+        #self.blackStork.join(30)
+        
+    def checkForDeadChildren(self):
+        '''
+        This function calls a non-blocking wait on the direct children of the server.
+        Any call to subprocess or Popen which depends on the returned value of the process it starts
+            must LOCK the server.waitMutex before starting the process.  This is because
+            the exit status of a process can only be retrieved once, and without setting that mutex,
+            this function may absorb the necessary information.
+        '''
+        #Handle dying children.
+        #this loop's condition will be tested on init or when all of the children have died, be it because the server's shutting down
+        #or because all child processes have crashed and none have yet been restarted
+        deadChildren = []
+        while True:
+            self.server.waitMutex.acquire()
+            pid, exit = os.waitpid(-1, os.WUNTRACED | os.WNOHANG) #look for the death of a direct child of this process
+            self.server.waitMutex.release()
+            if pid == 0:
+                break
+            deadChildren.append( str(pid) )
+            print "Child " + str(pid) + " has died.  So it goes.\n"
+        
+        if len(deadChildren) > 0:
+            self.dropProcesses(deadChildren, True) #notify the watchdog that the process has died, which will then tell the thread
+        
+    
+    def removeThread(self, threadId):
+        '''
+        Remove the specified thread from the list over which watchdog watches
+        '''
+        self.threadsMutex.acquire()
+        
+        try:
+            del self.threads[threadId]
+        except KeyError: #if that threadId doesn't exist in the dictionary
+            print "watchdog failed to remove threadId '" + threadId + "' because it is not in its list.\n"
+        except Exception, (message):
+            print "watchdog failed to remove threadId '" + threadId + "': " + str(message)
+            
+        self.threadsMutex.release()
+        
+    def addThread(self, threadId, processes):
+        '''
+        add the thread to watchdog's list.
+        Optionally include processes to watch over
+        '''
+        if processes == None:
+            processes = []
+            
+        self.updateProcesses(threadId, processes)
+        
+    def updateProcesses(self, threadId, processes):
+        '''
+        Update the list of associated processes for the given threadId
+            to the new list (processes)
+        '''
+        self.threadsMutex.acquire()
+        self.threads[threadId] = processes
+        self.threadsMutex.release()
+        
+    def dropProcesses(self, processes, notifyThread=True):
+        '''
+        Stop watching these processes.  processes can be a string if it's a single process, or a list of strings.
+        If notifyThread is True, the threads associated with each of the dropped processes will be notified that 
+        they've been dropped (if the thread didn't call this itself, the process probably died and was taken by 
+        the blackStork).
+        '''
+        #if it's a single string, make it a list
+        if type(processes) == type( '' ):
+            processes = [processes]
+        
+        #the list of dropped processes will be sent to the appropriate thread
+        #dropped will store the dropped processes, grouped by threadId
+        dropped = {}
+            
+        self.threadsMutex.acquire()
+        
+        #search through all of the processes in each thread to see if this process was being watched
+        for threadId, thread in self.threads:
+            for watched in thread:
+                if watched in processes:
+                    self.threads[threadId].remove(watched)
+                    processes.remove(watched)
+                    
+                    if notifyThread:
+                        if not threadId in dropped:
+                            dropped[threadId] = []
+                        dropped[threadId].append(watched)
+              
+        self.threadsMutex.release()
+        
+        #if notifyThread is False, dropped will be empty
+        for threadId in dropped:
+            self.server.singleProcesses[threadId].deathNotify(dropped[threadId])
+        
+    
             
             
 
@@ -172,7 +333,7 @@ class jobStatus:
     
 class requestHandler(threading.Thread):
     def __init__(self,client, server):
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, name="requestHandler")
         self.client = client
         self.size = server.size
         self.server = server
@@ -252,7 +413,7 @@ class requestHandler(threading.Thread):
         except socket.error, (message):
             print "Socket error:\n" + str(message) + "\n"
         except Exception, (message):
-            print message
+            print str(message)
         finally:
             #now close the connection 
             self.client.close()
@@ -290,14 +451,14 @@ class requestHandler(threading.Thread):
             #if we couldn't read all of the files
             except Exception, (message):
                 try:
-                    self.client.sendall('STATUS ' + str(jobStatus.error) + ": " + message)
-                except Exception (message):
-                    print "Unknown Error: " + message
+                    self.client.sendall('STATUS ' + str(jobStatus.error) + ": " + str(message))
+                except Exception, (message):
+                    print "Unknown Error: " + str(message)
         
         except socket.error, (message):
-            print "Socket Error: " + message
+            print "Socket Error: " + str(message)
         except Exception, (message):
-            print "Unknown Error: " + message
+            print "Unknown Error: " + str(message)
         
         #So now we have the data (or failure).  Let's send the data back to the client.
         try:
@@ -305,9 +466,9 @@ class requestHandler(threading.Thread):
                 for file in data:
                     self.client.sendall( file[0] + "::file start::" + file[1] + "::fileEnd")
         except socket.error, (message):
-            print "Socket Error: " + message
+            print "Socket Error: " + str(message)
         except Exception, (message):
-            print "Unknown Error: " + message
+            print "Unknown Error: " + str(message)
     
     def stat(self, ticket):
         try:
@@ -318,9 +479,9 @@ class requestHandler(threading.Thread):
             if value == 2:
                 return "Ticket not found.\n", jobStatus.notFound
             else:
-                return message, jobStatus.error
+                return str(message), jobStatus.error
         except Exception, (message):
-            return "Unknown Error: " + message, jobStatus.error
+            return "Unknown Error: " + str(message), jobStatus.error
             
         if logfile.find('timeCompleted:') >= 0:
             return logfile, jobStatus.done
@@ -364,17 +525,5 @@ class requestHandler(threading.Thread):
 if __name__ == "__main__":
     s = Server()
     s.run()
-    #only the main thread can catch signals.  Handle dying children.
-    #this loop's condition will be tested on init or when all of the children have died, be it because the server's shutting down
-    #or because all child processes have crashed and none have yet been restarted
-    #while s.watchdog.allChildrenReaped is False:
-    #os.waitpid will throw an OSError exception when this process has no children
-    try:
-        while True:
-            pid, exit = os.waitpid(-1, os.WUNTRACED)
-            print "Child " + str(pid) + " has died.  So it goes.\n"
-            #TODO: notify watchdog that this child has died.
-    except OSError, (value, message):
-        if value is not 10:
-            raise OSError(value, message)
+    #only the main thread can catch signals.  
     

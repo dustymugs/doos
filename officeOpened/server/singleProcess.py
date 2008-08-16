@@ -14,12 +14,13 @@ home = '/home/clint/officeOpened/homeDirectories/'
 
 #officeInstance inherits from Thread
 class singleProcess (threading.Thread):
-    def __init__(self, threadNumber, jobQueue, watchdog):
-        threading.Thread.__init__(self)
+    def __init__(self, threadNumber, jobQueue, watchdog, waitMutex):
+        threading.Thread.__init__(self, name="singleProcess" + threadNumber)
         self.threadId = threadNumber
         self.jobQueue = jobQueue
-        self.ooScriptRunner = runScript.scriptRunner(self.threadId, home, watchdog)
+        self.ooScriptRunner = runScript.scriptRunner(self.threadId, home, waitMutex)
         self.watchdog = watchdog
+        self.waitMutex = waitMutex
     
     def run(self):
 
@@ -72,6 +73,7 @@ class singleProcess (threading.Thread):
         #get the PIDs of the processes associated with this thread
         pids = self.getPIDs()
         #and kill them all
-        officeOpenedUtils.kill([pids])
-        
-        self.watchdog = None
+
+        officeOpenedUtils.kill([pids], self.waitMutex)
+        self.server = None
+        self.watchdog.removeThread(self.threadId)

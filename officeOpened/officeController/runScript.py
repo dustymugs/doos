@@ -19,7 +19,7 @@ import shutil
 import zipfile
 
 class scriptRunner:
-    def __init__(self, instanceId, homeDir, restartedJob):
+    def __init__(self, instanceId, homeDir, waitMutex):
         self.instanceId = instanceId
         self.home = homeDir + "officeOpened" + str(instanceId) + '/'
         self.shuttingDown = False
@@ -35,10 +35,14 @@ class scriptRunner:
         #OOo spawns a child process which we'll have to look out for.
         #now get the child process which has been spawned (need to kill -9 it in case anything goes wrong)
         print "about to look for children of thread " + str(self.instanceId) + " with ppid= " + str(self.childOffice.pid) + "\n"
+        self.grandchildren = []
+        #acquire the right to call wait()
+        waitMutex.acquire()
         ps = subprocess.Popen(("ps", "--no-headers", "--ppid", str(self.childOffice.pid), "o", "pid"), \
                                         env={ "PATH": os.environ["PATH"]}, stdout=subprocess.PIPE)
-        self.grandchildren = []
         psOutput = ps.communicate()[0]
+        #release the wait mutex
+        waitMutex.release()
         for child in psOutput.split("\n")[:-1]: #the last element will be '' so drop it
             self.grandchildren.append(child.lstrip()) #needs to be a string rather than an int. Remove leading whitespace.
             
