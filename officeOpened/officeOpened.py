@@ -213,10 +213,12 @@ class watchdog(threading.Thread):
         while not self.readyToExit:
             time.sleep(self.interval)
             
+            deadChildren = self.blackStork()
+            
             #need to acquire a lock here for the threads list since hatching and dying threads can modify this list
             self.threadsMutex.acquire()
             
-            if self.threads is {}: #then all threads have been removed and it's time to shut down
+            if self.threads == {}: #then all threads have been removed and it's time to shut down
                 self.clear()
             else:
                 processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
@@ -228,13 +230,16 @@ class watchdog(threading.Thread):
         self.server = None
         #self.blackStork.join(30)
         
-    def checkForDeadChildren(self):
+    def blackStork(self):
         '''
         This function calls a non-blocking wait on the direct children of the server.
+        Returns a list of process IDs which have died without having been wait()ed for
         Any call to subprocess or Popen which depends on the returned value of the process it starts
             must LOCK the server.waitMutex before starting the process.  This is because
             the exit status of a process can only be retrieved once, and without setting that mutex,
             this function may absorb the necessary information.
+        This function is needed because when child processes terminate but aren't wait()ed for, they
+            become Zombie processes which take up memory but don't do anything useful.
         '''
         #Handle dying children.
         #this loop's condition will be tested on init or when all of the children have died, be it because the server's shutting down
@@ -242,8 +247,20 @@ class watchdog(threading.Thread):
         deadChildren = []
         while True:
             self.server.waitMutex.acquire()
-            pid, exit = os.waitpid(-1, os.WUNTRACED | os.WNOHANG) #look for the death of a direct child of this process
-            self.server.waitMutex.release()
+            
+            try:
+                pid, exit = os.waitpid(-1, os.WUNTRACED | os.WNOHANG) #look for the death of a direct child of this process
+            except OSError, (value, message):
+                if value == 10:
+                    pid = 0
+                else:
+                    raise OSError(value, message)
+                
+            self.server.waitMutex.release() # waitMutex needs to be released before calling dropProcesses to prevent a deadlock
+                                            # because otherwise this function would have both waitMutex and executionMutex(through
+                                            # deathNotify(), and at the same time runScript.ooScriptRunner.execute() uses both the 
+                                            # waitMutex and the executionMutex
+            
             if pid == 0:
                 break
             deadChildren.append( str(pid) )
@@ -251,6 +268,8 @@ class watchdog(threading.Thread):
         
         if len(deadChildren) > 0:
             self.dropProcesses(deadChildren, True) #notify the watchdog that the process has died, which will then tell the thread
+            
+        return deadChildren
         
     
     def removeThread(self, threadId):
@@ -305,11 +324,13 @@ class watchdog(threading.Thread):
         self.threadsMutex.acquire()
         
         #search through all of the processes in each thread to see if this process was being watched
-        for threadId, thread in self.threads:
-            for watched in thread:
+        for threadId in self.threads.keys():
+            for watched in self.threads[threadId]:
                 if watched in processes:
-                    self.threads[threadId].remove(watched)
                     processes.remove(watched)
+                    self.threads[threadId].remove(watched)
+                    if self.threads[threadId] == None: #checkProcesses expects a list (possible empty) of strings; won't work with None
+                        self.threads[threadId] = []
                     
                     if notifyThread:
                         if not threadId in dropped:
@@ -516,7 +537,7 @@ class requestHandler(threading.Thread):
         os.mkdir(self.home + 'files/output/' + filename)
         file = open(self.home + 'files/output/' + filename + '/status.txt', 'w')
         #log the date and time
-        file.write('timeEntered:' + datetime.datetime.utcnow().isoformat())
+        file.write('timeEntered:' + datetime.datetime.utcnow().isoformat() + "\n")
         file.close()
         #finally, put the data into the queue
         self.server.jobQueue.put( dirpath, True )

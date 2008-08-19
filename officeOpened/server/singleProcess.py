@@ -20,7 +20,9 @@ class singleProcess (threading.Thread):
         self.jobQueue = jobQueue
         self.ooScriptRunner = runScript.scriptRunner(self.threadId, home, waitMutex)
         self.watchdog = watchdog
-        self.waitMutex = waitMutex
+        self.waitMutex = waitMutex #prevents self.watchdog.blackStork() from robbing calls to outside programs of their exit status
+        self.myKidsMutex = threading.Lock() #prevents conflicts between getPIDs() and deathNotify()
+        self.shuttingDown = False
     
     def run(self):
 
@@ -44,19 +46,41 @@ class singleProcess (threading.Thread):
                 (junk, ticketNumber) = dirpath.rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
                 #now write the time that the file was taken out of the queue
                 file = open(home + 'files/output/' + str(ticketNumber) + '/status.txt', 'a')
-                file.write('\ntimeDequeued:' + datetime.datetime.utcnow().isoformat())
+                file.write('timeDequeued:' + datetime.datetime.utcnow().isoformat() + "\n")
                 file.close()
                 #execution stage
-                self.ooScriptRunner.execute(dirpath, args)
+                success = self.ooScriptRunner.execute(dirpath, args)
                 #write the job's status to status.txt now that it's done
                 file = open(home + 'files/output/' + str(ticketNumber) + '/status.txt', 'a')
-                file.write('\ntimeCompleted:' + datetime.datetime.utcnow().isoformat())
+                
+                if success:
+                    file.write('timeCompleted:')
+                else:
+                    file.write('timeFailed:')
+                
+                file.write( datetime.datetime.utcnow().isoformat() + "\n" )
                 file.close()
                 #remove the file now that we're done with it
                 os.remove(dirpath + '.data') 
                 os.remove(dirpath + '.args')
             
             self.jobQueue.task_done() #helps the queue keep track of how many jobs are still running
+            
+    def deathNotify(self, deadKids):
+        '''
+        When one of the processes registered by this thread to the watchdog dies and is caught by the watchdog (through 
+        SIGCHLD from the system), the watchdog will pass the list of dead processes to this function.  This function grabs 
+        the myKidsMutex to block getPIDs() calls temporarily, and passes the dead kids notification on to the implemented 
+        process handler.  It will then update the watchdog's process list for this thread.
+        
+        The function will do nothing if self.clear() has been run (and we are therefore shutting down).
+        '''
+        if not self.shuttingDown:
+            self.myKidsMutex.acquire()
+            newProcessList = self.ooScriptRunner.deathNotify(deadKids)
+            self.myKidsMutex.release()
+            
+            self.watchdog.updateProcesses( self.threadId, self.getPIDs() )
  
     def getPIDs(self):
         '''
@@ -64,12 +88,21 @@ class singleProcess (threading.Thread):
         child processes spawned by that process.  Like so:
         ["123", "4325", "2342"]
         '''
-        return self.ooScriptRunner.getPIDs()
+        #use the myKidsMutex so that deathNotify doesn't screw with this
+        self.myKidsMutex.acquire()
+        
+        myKids = self.ooScriptRunner.getPIDs()
+        
+        self.myKidsMutex.release()
+        return myKids
     
     def clear(self):
         '''
-        Pre-destructor code to break circular references between the watchdog and the thread
+        Pre-destructor code to:
+            break circular references between the watchdog and the thread
+            kill child processes
         '''
+        self.shuttingDown = True
         #get the PIDs of the processes associated with this thread
         pids = self.getPIDs()
         #and kill them all

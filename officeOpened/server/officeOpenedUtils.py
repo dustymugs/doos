@@ -48,6 +48,8 @@ def checkProcesses(groups, waitMutex):
     threads = {}
     ownerOf = {} #pairs a Process ID with the thread it belongs to
     
+    print "checkProcesses got: " + str(groups) + "\n"
+    
     for threadId in groups.keys():
         PIDs = groups[threadId]
         #start creating the hierarchy
@@ -57,20 +59,21 @@ def checkProcesses(groups, waitMutex):
             ownerOf[process] = threadId
             
     pidString = pidString[:-1] #remove that trailing ','
-        
-    #acquire the right to wait
-    waitMutex.acquire()
-    #output the PID and CPU usage of the processes in threadString
-    ps = subprocess.Popen(("ps", "S", "--no-headers", "o", "pid,pcpu", "--pid", pidString), stdout=subprocess.PIPE)
-    processStrings = ps.communicate()[0].split("\n") #make a list of strings with PID and CPU usage
-    #release the wait mutex
-    waitMutex.release()
     
-    #now run through the result of ps and add each process's cpu usage to its thread's total
-    for process in processStrings[:-1]: #the last item of processStrings will be '' so drop it
-        pid, cpu =  process.split(None, 2)
-        pid = pid.lstrip() #get rid of leading whitespace
-        threads[ ownerOf[pid] ]  [0] += float(cpu) #adds to the cpu usage of that PID's thread
+    if len(pidString) > 0:
+        #acquire the right to wait
+        waitMutex.acquire()
+        #output the PID and CPU usage of the processes in threadString
+        ps = subprocess.Popen(("ps", "S", "--no-headers", "o", "pid,pcpu", "--pid", pidString), stdout=subprocess.PIPE)
+        processStrings = ps.communicate()[0].split("\n") #make a list of strings with PID and CPU usage
+        #release the wait mutex
+        waitMutex.release()
+        
+        #now run through the result of ps and add each process's cpu usage to its thread's total
+        for process in processStrings[:-1]: #the last item of processStrings will be '' so drop it
+            pid, cpu =  process.split(None, 2)
+            pid = pid.lstrip() #get rid of leading whitespace
+            threads[ ownerOf[pid] ]  [0] += float(cpu) #adds to the cpu usage of that PID's thread
         
     return threads;
 
@@ -112,24 +115,27 @@ def kill(drunkards, waitMutex):
     #now give them 3 seconds to get out
     time.sleep(3)
     
-    #acquire the right to call wait()
-    waitMutex.acquire()
-    #check to see if any drunkards are still lingering (by running ps and passing it the list of process IDs)
-    ps = subprocess.Popen( ("ps", "--no-headers", "o", "pid", "--pid", ",".join(checkList) ), stdout=subprocess.PIPE)
-    lingeringDrunkards = ps.communicate()[0].split("\n") #make a list of PIDs which are still alive
-    #release the wait mutex
-    waitMutex.release()
-    
-    for drunkard in lingeringDrunkards[:-1]: #the last item of lingeringDrunkards = ''
-        print "SIGKILL:\t" + drunkard + "\n"
-        try:
-            os.kill ( int(drunkard), signal.SIGTERM ) #politely ask the drunkard to leave
-        except OSError, (value, message):
-            if value == 3: #the drunkard has already left
-                print "Notice: process " + drunkard + " is already dead; no SIGKILL necessary.\n"
-            else:
-                print "Unknown OSError while attempting to SIGKILL process " + drunkard + ": " + message + "\n"
-        except Exception, (message):
-            print "Unknown exception while attempting to SIGKILL process " + drunkard + ": " + str(message) + "\n"
+    #don't do all this if there are no processes to worry about
+    if len(checkList) > 0:
+        #acquire the right to call wait()
+        waitMutex.acquire()
+        #TODO: modify this so that we call waitpid() for the ones we're interested in instead of ps
+        #check to see if any drunkards are still lingering (by running ps and passing it the list of process IDs)
+        ps = subprocess.Popen( ("ps", "--no-headers", "o", "pid", "--pid", ",".join(checkList) ), stdout=subprocess.PIPE)
+        lingeringDrunkards = ps.communicate()[0].split("\n") #make a list of PIDs which are still alive
+        #release the wait mutex
+        waitMutex.release()
+        
+        for drunkard in lingeringDrunkards[:-1]: #the last item of lingeringDrunkards = ''
+            print "SIGKILL:\t" + drunkard + "\n"
+            try:
+                os.kill ( int(drunkard), signal.SIGTERM ) #politely ask the drunkard to leave
+            except OSError, (value, message):
+                if value == 3: #the drunkard has already left
+                    print "Notice: process " + drunkard + " is already dead; no SIGKILL necessary.\n"
+                else:
+                    print "Unknown OSError while attempting to SIGKILL process " + drunkard + ": " + message + "\n"
+            except Exception, (message):
+                print "Unknown exception while attempting to SIGKILL process " + drunkard + ": " + str(message) + "\n"
             
     print "\n"
