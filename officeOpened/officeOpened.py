@@ -22,19 +22,10 @@ When a client requests a ticket, the system searches the output folder for the t
 '''
 TODO: 
     Fix exception handling with socket events
-    If you restart a server, you'll get "Could not start up, socket in use" which skips killing everyone and quits.  Kill everyone first.
+    If you restart a server, you'll get "Could not start up, socket in use."  Figure out how to make it work, or just quit.
     On server startup, check files/input for any files, and run those first.  Those are files which were processing when the server died.
         Clients may be looking for them.
-    Kill everyone who ignores SIGTERM
     Remove output after it's been retrieved, or add a deletion function that clients can call after retrieval
-    Make sure that <<defunct>> processes don't display weirdly with this usage of ps
-    os.waitpid() isn't catching murdered processes.  Find out why.
-    
-    ZOMBIES:
-        wait() for murthered processes to finish.
-        Create a signal handler for children that die and reap their souls
-        Does killing still send SIGCHLD?
-    
 '''
 import select
 import socket
@@ -46,7 +37,7 @@ import hashlib
 from server.singleProcess import singleProcess
 from server import officeOpenedUtils
 import random
-import datetime
+from datetime import datetime
 import time
 
 class Server:
@@ -57,7 +48,7 @@ class Server:
         self.size = 4096
         self.server = None
         self.jobQueue = Queue()
-        self.outputQueue = Queue()
+        #this keeps track of which thread has which job
         self.singleProcesses = {}
         self.running = True
         self.input = []
@@ -68,7 +59,7 @@ class Server:
         #Create numsingleProcesses singleProcess's, indexed by an id.
         for i in range(numSingleProcesses):
             i = str(i)
-            self.singleProcesses[i] = singleProcess( i, self.jobQueue, self.watchdog, self.waitMutex )
+            self.singleProcesses[i] = singleProcess( i, self )
             self.singleProcesses[i].start()
             self.watchdog.addThread( i, self.singleProcesses[i].getPIDs() )
             
@@ -139,77 +130,55 @@ class Server:
         self.jobQueue.join()
         #the watchdog will shut itself down when all threads have removed themselves from its list.
 
-'''class blackStork(threading.Thread):
-    ''
-    This thread waits for our children to die and takes them back to the Source (reaps them).
-    ''
-    def __init__(self, watchdog):
-        threading.Thread.__init__(self, name="blackStork")
-        self.watchdog = watchdog
-        
-    def run(self):
-        #Handle dying children.
-        #this loop's condition will be tested on init or when all of the children have died, be it because the server's shutting down
-        #or because all child processes have crashed and none have yet been restarted
-        while self.watchdog.readyToExit is False:
-            #os.waitpid will throw an OSError exception when this process has no children
-            try:
-                while True:
-                    pid, exit = os.waitpid(0, os.WUNTRACED) #await the death of any process in this process group
-                    self.watchdog.dropProcesses([str(pid)], True) #notify the watchdog that the process has died, which will then tell the thread
-                    print "Child " + str(pid) + " has died.  So it goes.\n"
-            except OSError, (value, message):
-                if value is 10: #error 10 means that there are no children to wait for
-                    #this can happen if all child processes have crashed, in which case we don't want to exit
-                    #so we must also make sure that watchdog says we're ready to exit before closing down the thread
-                    if self.watchdog.readyToExit:
-                        self.clear()
-                        break
-                else:
-                    raise OSError(value, message)
-          
-    def clear(self):
-        self.watchdog = None
-'''
-
 class watchdog(threading.Thread):
     '''
     This thread checks every *interval* seconds (usually 5 seconds) to make sure of the following:
     
-        Are the threads which have jobs are still using CPU time? Or if they are, has the job been running for less time than the timeout?
-        If not:
-            kill the thread (if it even exists)
-            log the error in output/ticket/status.txt
-            if the job has died before:
-                Restart the thread with job it died on.
-            else:
-                log a fatal error in status.txt
-        Are the processes still alive?
-            If not, start them up again
-            
+        For the threads which have jobs:
+            If they're still running after self.timeout and they haven't been using much CPU time, kill them.
+                else if they're still running but are using a fair amount of CPU time, give them 1/2 of self.timeout longer to run.
+        
+        Have any processes died since the last time watchdog was awake?
+            If so, inform the appropriate threads (which will then restart them)
+    
+    self.threads keeps track of what each thread is and is supposed to be up to.  Each threadId has a key.  Each element of 
+    self.threads represents one thread, and is itself a dictionary with the following keys:
+    
+        "ticket": a string representing the ticket number of the job being worked on, or "ready" if the thread is idle
+        "processes": a list of the strings, each representing a Process ID which was spawned by the thread
+        "extensions granted": the number of times that the job has been given extra time over the default timeout
+        "timestamp": the time the most recent job was accepted by the thread (approximately timeDequeued in status.txt)
+        "cpu": the sum of the cpu usage samples taken for the current job
+    
+    
     self.threads is of the form:
      [
-         "0": [parent, child, child], 
-         "1": [parent], 
-         "2": [parent, child] ]       
-    ]    (etc.)  where parent and child are string representations of process IDs
-    
-    TODO: handle dying children
+         "0": { "ticket":'2423528', "processes":["123", "124", "125"], "extensions granted":0, "timestamp":1219194339.800941, "cpu": 10.3 }, 
+         "1": { "ticket":'171471', "processes":["588"], "extensions granted":1, "timestamp":1219194335.857452, "cpu": 15.3 }, 
+         "2": { "ticket":'ready', "processes":["242", "243", "245"], "extensions granted":0, "timestamp":1219194339.800941, "cpu": 0.4 }
+    ]    (etc.)  
+                    where the index is the thread id, and parent and child are string representations of process IDs
+                    The PID of the parent process always goes first in the "processes" list.
+                    The purpose of differentiating the parent is so that officeOpenedUtils.kill() can send SIGTERM
+                    to the parent and giving it an opportunity to bury its children.  Failing that, it'll send 
+                    SIGKILL to whoever is still alive among the parent and its children.
     '''
     def __init__(self, server, interval=5, timeout=30):
         threading.Thread.__init__(self, name="watchdog")
-        self.interval = interval
-        self.timeout = timeout
-        self.threads = {} #the threads being watched over.  Not linking to server.threads because we don't want circular references
+        self.interval = datetime.timedelta(seconds=interval) #the number of seconds for which watchdog sleeps after checking the threads
+        self.timeout = datetime.timedelta(seconds=timeout) #the normal length of time a job has to complete before being killed
+        self.maxExtensions = 1 #maximum number of time extensions over the timeout that can be given if the thread is still using the CPU
+        self.minCPU = 10.0 #the minimum average of the percent of the CPU which a thread must be using to be kept alive past the timeout
+        self.threads = {} #information about the threads being watched over
         self.threadsMutex = threading.Lock()
         self.running = True
         self.readyToExit = False #this is for the main thread's wait() loop. When all children have been reaped, this will be True
         self.server = server
-        #self.blackStork = blackStork(self) #the watchdog owns and controls the black stork
         
     def run(self):
-        #self.blackStork.start()
-        
+        '''
+        The main execution function for watchdog
+        '''
         while not self.readyToExit:
             time.sleep(self.interval)
             
@@ -223,6 +192,29 @@ class watchdog(threading.Thread):
             else:
                 processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
                 print "----------------\n" + "Watchdog sees the following process usage:\n" + str(processes) + "\n----------------\n"
+                
+                for threadId in self.threads.keys():
+                    #first add this interval's sample of the CPU usage
+                    self.threads[threadId]["cpu"] += processes[threadId][0]
+                    #if the job has been running longer than self.timeout seconds
+                    if self.timeout < ( datetime.now() - self.threads[threadId]["timestamp"] ):
+                        #if there haven't been too many extensions granted, and the average CPU usage has been at least self.minCPU
+                        if self.threads[threadId]["extensions granted"] < self.maxExtensions and \
+                                self.threads[threadId]["cpu"] / ( self.timeout.seconds // self.interval.seconds ) > self.minCPU:
+                            self.threads[threadId]["extensions granted"] += 1 #note that another extension has been granted
+                            self.threads[threadId]["timestamp"] += self.timeout / 2 #pretends that the job started 1/2 of timeout later
+                        else:
+                            '''
+                            if this job's time has run out, kill the processes and deathNotify singleProcess.
+                            Reset the timestamp and the extensions granted.
+                            this will not become an infinite time extension because singleProcess will give up 
+                            on a job after too many failures.
+                            '''
+                            self.threads[threadId]["extensions granted"] = 0
+                            self.threads[threadId]["timestamp"] = datetime.now()
+                            
+                            officeOpenedUtils.kill(self.threads[threadId]["processes"], self.waitMutex)
+                            self.server.singleProcesses[threadId].deathNotify( self.threads[threadId]["processes"] )
             self.threadsMutex.release()
             
     def clear(self):
@@ -290,20 +282,35 @@ class watchdog(threading.Thread):
     def addThread(self, threadId, processes):
         '''
         add the thread to watchdog's list.
-        Optionally include processes to watch over
+        Optionally include processes to watch over, and include the thread's status or which job it's working on.
         '''
         if processes == None:
             processes = []
             
-        self.updateProcesses(threadId, processes)
+        self.updateThread(threadId=threadId, processes=processes, ticket="ready")
         
-    def updateProcesses(self, threadId, processes):
+    def updateThread(self, threadId, processes, ticket, extensionsGranted):
         '''
-        Update the list of associated processes for the given threadId
-            to the new list (processes)
+        Update watchdog's self.threads dictionary entry for thread *threadId*, 
+        only changing variables that are passed in:
+            processes for "processes", ticket for "ticket", extensionsGranted for "extensions granted"
+            
+        If a ticket is passed, reset the CPU usage sum and set the timestamp to right now
         '''
         self.threadsMutex.acquire()
-        self.threads[threadId] = processes
+        
+        #only update the thread's status if the argument is not the keyword None
+        if not ticket is None:
+            self.threads[threadId]["ticket"] = ticket
+            self.threads[threadId]["cpu"] = 0 #if there's a new ticket, reset the cpu usage sum
+            self.threads[threadId]["timestamp"] = datetime.now() #and the timestamp
+        #only update the processes list if the argument is not the keyword None
+        if not processes is None:
+            self.threads[threadId]["processes"] = processes
+            
+        if not extensionsGranted is None:
+            self.threads[threadId]["extensions granted"] = extensionsGranted
+        
         self.threadsMutex.release()
         
     def dropProcesses(self, processes, notifyThread=True):
@@ -325,12 +332,12 @@ class watchdog(threading.Thread):
         
         #search through all of the processes in each thread to see if this process was being watched
         for threadId in self.threads.keys():
-            for watched in self.threads[threadId]:
+            for watched in self.threads[threadId]['processes']:
                 if watched in processes:
                     processes.remove(watched)
-                    self.threads[threadId].remove(watched)
-                    if self.threads[threadId] == None: #checkProcesses expects a list (possible empty) of strings; won't work with None
-                        self.threads[threadId] = []
+                    self.threads[threadId]['processes'].remove(watched)
+                    if self.threads[threadId]['processes'] == None: #checkProcesses expects a list (possible empty) of strings; won't work with None
+                        self.threads[threadId]['processes'] = []
                     
                     if notifyThread:
                         if not threadId in dropped:
@@ -348,8 +355,10 @@ class watchdog(threading.Thread):
             
 
 
-#this is an enumeration for the status of jobs
 class jobStatus:
+    '''
+    This is an enumeration for the status of jobs
+    '''
     notFound, error, enqueued, dequeued, done = range(5)
     
 class requestHandler(threading.Thread):
@@ -506,6 +515,8 @@ class requestHandler(threading.Thread):
             
         if logfile.find('timeCompleted:') >= 0:
             return logfile, jobStatus.done
+        elif logfile.find('timeFailed:') >= 0:
+            return logfile, jobStatus.error
         elif logfile.find('timeDequeued:') >= 0:
             return logfile, jobStatus.dequeued
         else:
@@ -537,7 +548,7 @@ class requestHandler(threading.Thread):
         os.mkdir(self.home + 'files/output/' + filename)
         file = open(self.home + 'files/output/' + filename + '/status.txt', 'w')
         #log the date and time
-        file.write('timeEntered:' + datetime.datetime.utcnow().isoformat() + "\n")
+        file.write('timeEntered:' + datetime.datetime.now().isoformat() + "\n")
         file.close()
         #finally, put the data into the queue
         self.server.jobQueue.put( dirpath, True )

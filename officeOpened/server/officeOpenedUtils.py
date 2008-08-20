@@ -29,29 +29,28 @@ def checkProcesses(groups, waitMutex):
     '''
     Generate a dictionary of collective CPU usage for each thread's processes
     Expects a dictionary "groups" of the form:
-        [
-            1: ['132', '2133', '1231'],
-            2: ['34', '2435'],
-            0: ['345', '55', '345', '3455']
-        ]
+        {
+            1: { 'processes': ['132', '2133', '1231'] },
+            2: { 'processes': ['34', '2435'] },
+            0: { ''processes': ['345', '55', '345', '3455'] }
+        }
             ...where the key is the thread id according to singleProcess.py
     
     Returns a similar dictionary, but CPU usage is given as a percentage of total CPU time, followed by associated PIDs:
-        [
+        {
             1: [ 22, ['132', '2133', '1231'] ],
             2: [ 12, ['34', '2435'] ],
             0: [ 1, ['345', '55', '345', '3455'] ]
-        ]
-            
+        }
+    
+    This function has only been tested on Linux's ps (procps version 3.2.7)
     '''
     pidString = ""
     threads = {}
     ownerOf = {} #pairs a Process ID with the thread it belongs to
     
-    print "checkProcesses got: " + str(groups) + "\n"
-    
     for threadId in groups.keys():
-        PIDs = groups[threadId]
+        PIDs = groups[threadId][1]
         #start creating the hierarchy
         threads[threadId] = [ 0.0, PIDs ] #each thread has an entry of (CPU usage, process IDs)
         pidString += ",".join(PIDs) + ','
@@ -77,7 +76,7 @@ def checkProcesses(groups, waitMutex):
         
     return threads;
 
-def kill(drunkards, waitMutex):
+def kill(drunkards, waitMutex, timeToDie=3.0):
     '''
     Kill the passed processes in the same way that people at Froggy's deal with drunkards at closing time:
         Politely ask the drunkard to leave by giving him SIGTERM, and assume that he'll have the good graces
@@ -91,6 +90,8 @@ def kill(drunkards, waitMutex):
             [ "864", "8668", "3838" ],    #864 is the parent process id of this thread
             [ "483", "4383", "3483" ]    #483 is the parent process id of this thread
         ]
+        
+    TODO: IMPORTANT: drop the use of ps in favor of waitpid() for the killed threads.  Don't want watchdog to catch and deal with them.
     '''
     checkList = [] #this list will be join()'d and passed to ps as the PIDs to investigate
     for clique in drunkards:
@@ -112,17 +113,29 @@ def kill(drunkards, waitMutex):
             
     print "\n"
     
-    #now give them 3 seconds to get out
-    time.sleep(3)
+    #now give them timeToDie seconds to get out
+    time.sleep(timeToDie)
     
     #don't do all this if there are no processes to worry about
     if len(checkList) > 0:
         #acquire the right to call wait()
         waitMutex.acquire()
         #TODO: modify this so that we call waitpid() for the ones we're interested in instead of ps
+        for drunkard in checkList:
+            try:
+                pid, exit = os.waitpid(int(drunkard), os.WUNTRACED | os.WNOHANG) #look for the death of a direct child of this process
+                checkList.remove(drunkard)
+            except OSError, (value, message):
+                if value == 10:
+                    break
+                else:
+                    raise OSError(value, message)
+                
+        '''
         #check to see if any drunkards are still lingering (by running ps and passing it the list of process IDs)
         ps = subprocess.Popen( ("ps", "--no-headers", "o", "pid", "--pid", ",".join(checkList) ), stdout=subprocess.PIPE)
         lingeringDrunkards = ps.communicate()[0].split("\n") #make a list of PIDs which are still alive
+        '''
         #release the wait mutex
         waitMutex.release()
         
