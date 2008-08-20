@@ -37,7 +37,7 @@ import hashlib
 from server.singleProcess import singleProcess
 from server import officeOpenedUtils
 import random
-from datetime import datetime
+import datetime
 import time
 
 class Server:
@@ -52,7 +52,7 @@ class Server:
         self.singleProcesses = {}
         self.running = True
         self.input = []
-        self.watchdog = watchdog(self, interval=5, timeout=60)
+        self.watchdog = watchdog(self, interval=2, timeout=10)
         self.waitMutex = threading.Lock()
         self.serverSocketTimeout = 30
         
@@ -180,7 +180,7 @@ class watchdog(threading.Thread):
         The main execution function for watchdog
         '''
         while not self.readyToExit:
-            time.sleep(self.interval)
+            time.sleep(self.interval.seconds)
             
             deadChildren = self.blackStork()
             
@@ -194,27 +194,34 @@ class watchdog(threading.Thread):
                 print "----------------\n" + "Watchdog sees the following process usage:\n" + str(processes) + "\n----------------\n"
                 
                 for threadId in self.threads.keys():
-                    #first add this interval's sample of the CPU usage
-                    self.threads[threadId]["cpu"] += processes[threadId][0]
-                    #if the job has been running longer than self.timeout seconds
-                    if self.timeout < ( datetime.now() - self.threads[threadId]["timestamp"] ):
-                        #if there haven't been too many extensions granted, and the average CPU usage has been at least self.minCPU
-                        if self.threads[threadId]["extensions granted"] < self.maxExtensions and \
-                                self.threads[threadId]["cpu"] / ( self.timeout.seconds // self.interval.seconds ) > self.minCPU:
-                            self.threads[threadId]["extensions granted"] += 1 #note that another extension has been granted
-                            self.threads[threadId]["timestamp"] += self.timeout / 2 #pretends that the job started 1/2 of timeout later
-                        else:
-                            '''
-                            if this job's time has run out, kill the processes and deathNotify singleProcess.
-                            Reset the timestamp and the extensions granted.
-                            this will not become an infinite time extension because singleProcess will give up 
-                            on a job after too many failures.
-                            '''
-                            self.threads[threadId]["extensions granted"] = 0
-                            self.threads[threadId]["timestamp"] = datetime.now()
-                            
-                            officeOpenedUtils.kill(self.threads[threadId]["processes"], self.waitMutex)
-                            self.server.singleProcesses[threadId].deathNotify( self.threads[threadId]["processes"] )
+                    #if this thread is processing a job, determine whether or not it's been running too long
+                    if not self.threads[threadId]['ticket'] is 'ready':
+                        #first add this interval's sample of the CPU usage
+                        self.threads[threadId]["cpu"] += processes[threadId][0]
+                        #if the job has been running longer than self.timeout seconds
+                        if self.timeout < ( datetime.datetime.now() - self.threads[threadId]["timestamp"] ):
+                            #if there haven't been too many extensions granted, and the average CPU usage has been at least self.minCPU
+                            if self.threads[threadId]["extensions granted"] < self.maxExtensions and \
+                                    self.threads[threadId]["cpu"] / ( self.timeout.seconds // self.interval.seconds ) > self.minCPU:
+                                self.threads[threadId]["extensions granted"] += 1 #note that another extension has been granted
+                                self.threads[threadId]["timestamp"] += self.timeout / 2 #pretends that the job started 1/2 of timeout later
+                            else:
+                                '''
+                                if this job's time has run out, kill the processes and deathNotify singleProcess.
+                                Reset the timestamp and the extensions granted.
+                                this will not become an infinite time extension because singleProcess will give up 
+                                on a job after too many failures.
+                                '''
+                                self.threads[threadId]["extensions granted"] = 0
+                                self.threads[threadId]["timestamp"] = datetime.datetime.now()
+                                
+                                officeOpenedUtils.kill(self.threads[threadId]["processes"], self.server.waitMutex)
+                                #give the thread an opportunity to call watchdog.updateThread()
+                                self.threadsMutex.release()
+                                #need to call deathNotify() in case the OO instance dies after finishing the job but before watchdog is done
+                                self.server.singleProcesses[threadId].deathNotify( self.threads[threadId]["processes"] )
+                                #need the lock back for the next iteration
+                                self.threadsMutex.acquire()
             self.threadsMutex.release()
             
     def clear(self):
@@ -287,9 +294,13 @@ class watchdog(threading.Thread):
         if processes == None:
             processes = []
             
-        self.updateThread(threadId=threadId, processes=processes, ticket="ready")
+        self.threadsMutex.acquire()
+        self.threads[threadId] = {} #define a key for the thread in watchdog's list
+        self.threadsMutex.release()
+            
+        self.updateThread(threadId=threadId, processes=processes, ticket="ready", extensionsGranted=0)
         
-    def updateThread(self, threadId, processes, ticket, extensionsGranted):
+    def updateThread(self, threadId, processes=None, ticket=None, extensionsGranted=None):
         '''
         Update watchdog's self.threads dictionary entry for thread *threadId*, 
         only changing variables that are passed in:
@@ -303,7 +314,7 @@ class watchdog(threading.Thread):
         if not ticket is None:
             self.threads[threadId]["ticket"] = ticket
             self.threads[threadId]["cpu"] = 0 #if there's a new ticket, reset the cpu usage sum
-            self.threads[threadId]["timestamp"] = datetime.now() #and the timestamp
+            self.threads[threadId]["timestamp"] = datetime.datetime.now() #and the timestamp
         #only update the processes list if the argument is not the keyword None
         if not processes is None:
             self.threads[threadId]["processes"] = processes

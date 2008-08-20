@@ -32,7 +32,7 @@ def checkProcesses(groups, waitMutex):
         {
             1: { 'processes': ['132', '2133', '1231'] },
             2: { 'processes': ['34', '2435'] },
-            0: { ''processes': ['345', '55', '345', '3455'] }
+            0: { 'processes': ['345', '55', '345', '3455'] }
         }
             ...where the key is the thread id according to singleProcess.py
     
@@ -50,7 +50,7 @@ def checkProcesses(groups, waitMutex):
     ownerOf = {} #pairs a Process ID with the thread it belongs to
     
     for threadId in groups.keys():
-        PIDs = groups[threadId][1]
+        PIDs = groups[threadId]['processes']
         #start creating the hierarchy
         threads[threadId] = [ 0.0, PIDs ] #each thread has an entry of (CPU usage, process IDs)
         pidString += ",".join(PIDs) + ','
@@ -90,9 +90,15 @@ def kill(drunkards, waitMutex, timeToDie=3.0):
             [ "864", "8668", "3838" ],    #864 is the parent process id of this thread
             [ "483", "4383", "3483" ]    #483 is the parent process id of this thread
         ]
+    Or a single list of strings of said PIDs:
+    [ "2300", "2321", "3424" ],  #2300 is the parent process id
         
     TODO: IMPORTANT: drop the use of ps in favor of waitpid() for the killed threads.  Don't want watchdog to catch and deal with them.
     '''
+    #if it's a single list of strings, wrap it in another list
+    if type(drunkards[0]) is type(""):
+        drunkards = [drunkards]
+        
     checkList = [] #this list will be join()'d and passed to ps as the PIDs to investigate
     for clique in drunkards:
         drunkard = clique[0] #the first member of each list is the parent process
@@ -123,7 +129,7 @@ def kill(drunkards, waitMutex, timeToDie=3.0):
         #TODO: modify this so that we call waitpid() for the ones we're interested in instead of ps
         for drunkard in checkList:
             try:
-                pid, exit = os.waitpid(int(drunkard), os.WUNTRACED | os.WNOHANG) #look for the death of a direct child of this process
+                pid, exit = os.waitpid(int(drunkard), os.WNOHANG) #look for the death of a direct child of this process
                 checkList.remove(drunkard)
             except OSError, (value, message):
                 if value == 10:
@@ -139,7 +145,8 @@ def kill(drunkards, waitMutex, timeToDie=3.0):
         #release the wait mutex
         waitMutex.release()
         
-        for drunkard in lingeringDrunkards[:-1]: #the last item of lingeringDrunkards = ''
+        #for drunkard in lingeringDrunkards[:-1]: #the last item of lingeringDrunkards = ''
+        for drunkard in checkList:
             print "SIGKILL:\t" + drunkard + "\n"
             try:
                 os.kill ( int(drunkard), signal.SIGTERM ) #politely ask the drunkard to leave

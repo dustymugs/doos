@@ -22,7 +22,7 @@ class singleProcess (threading.Thread):
         threading.Thread.__init__(self, name="singleProcess" + threadNumber)
         self.threadId = threadNumber
         self.server = server
-        self.ooScriptRunner = runScript.scriptRunner(self.threadId, home, waitMutex)
+        self.ooScriptRunner = runScript.scriptRunner(self.threadId, home, self.server.waitMutex)
         self.myKidsMutex = threading.Lock() #prevents conflicts between getPIDs() and deathNotify()
         self.shuttingDown = False
     
@@ -46,7 +46,7 @@ class singleProcess (threading.Thread):
                 # parse out the ticket number
                 (junk, ticketNumber) = dirpath.rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
                 #each element in jobDistribution is a tuple of ( ticketNumber, time recorded, extensionsGranted)
-                self.server.watchdog.updateThread(threadId, ticket=ticketNumber, extensionsGranted=0)
+                self.server.watchdog.updateThread(self.threadId, ticket=ticketNumber, extensionsGranted=0)
                 #jobs are passed as dirpath, the path to the ticket's input files e.g. "~/OO/homeDirectories/files/input/23424"
                 #read the arguments from the .args file for this ticket
                 file = open(dirpath + '.args', 'r')
@@ -75,7 +75,7 @@ class singleProcess (threading.Thread):
                 os.remove(dirpath + '.args')
             
             self.server.jobQueue.task_done() #helps the queue keep track of how many jobs are still running
-            self.server.watchdog.updateThread(threadId, ticket='ready', extensionsGranted=0)
+            self.server.watchdog.updateThread(self.threadId, ticket='ready', extensionsGranted=0)
             
     def deathNotify(self, deadKids):
         '''
