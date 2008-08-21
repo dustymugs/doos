@@ -26,13 +26,14 @@ from server import officeOpenedUtils
 import threading
 
 class scriptRunner:
-    def __init__(self, instanceId, homeDir, waitMutex):
+    def __init__(self, instanceId, homeDir, waitMutex, singleProcess):
         self.instanceId = instanceId
         self.home = homeDir + "officeOpened" + str(instanceId) + '/'
         self.shuttingDown = False
         self.waitMutex = waitMutex
         self.executionMutex = threading.Lock()
         self.maxDispatchAttempts = 2
+        self.singleProcess = singleProcess
         
         self.startOO()
         
@@ -59,6 +60,10 @@ class scriptRunner:
         self.waitMutex.release()
         for child in psOutput.split("\n")[:-1]: #the last element will be '' so drop it
             self.grandchildren.append(child.lstrip()) #needs to be a string rather than an int. Remove leading whitespace.
+        
+        #inform the watchdog of the new process ids
+        if not self.singleProcess is None:
+            self.singleProcess.server.watchdog.updateThread( self.instanceId, processes=self.getPIDs() )
             
         print "done looking for children of thread " + str(self.instanceId) + ", found: '" + str(self.grandchildren) + "'\n\n"
 
@@ -76,9 +81,11 @@ class scriptRunner:
         procedure is finished before restarting Open Office.
         self.execute() will determine whether or not the OOo instance crashed during the job, so deathNotify competes with execute() for
         the executionMutex.
+        We only want to kill the PIDs active at the time deathNotify is run, and we only do that if one of the dead children is in the 
+        family tree returned by self.getPIDs().  This is because deathNotify may come late, and if execute() has already restarted OO, 
+        self.getPIDs() will return the new PIDs (we don't want to end up killing the new processes).
         '''
-        currentChildrenDead = False
-        familyTree = self.getPIDs()
+        familyTree = self.getPIDs() #get the current PIDs BEFORE waiting for the executionMutex.
         
         # we only want to restart if the reported dead child is still one we care about,
         # since execute() can restart the office instance on its own if it sees that the instance is dead.
@@ -87,7 +94,7 @@ class scriptRunner:
                 print "deathNotify can't stop thinking about executionMutex\n"
                 self.executionMutex.acquire()
                 
-                officeOpenedUtils.kill( self.getPIDs(), self.waitMutex )   
+                officeOpenedUtils.kill( familyTree, self.waitMutex )   
                 self.startOO()
                 print "deathNotify doesn't even care about execution"
                 self.executionMutex.release()
@@ -130,6 +137,7 @@ class scriptRunner:
         i = 1
         while (i <= self.maxDispatchAttempts):
             #prevent OO from being restarted by anyone else
+            print "execute() wants executionMutex in its life.\n"
             self.executionMutex.acquire()
             try:
                 # connect to the running office
@@ -176,6 +184,7 @@ class scriptRunner:
                 #if OO died because watchdog killed it, watchdog is probably in runScript.deathNotify(), which is waiting for  
                 #executionMutex. Give it a chance to complete its calls and start monitoring again before re-acquiring the mutex.
                 self.executionMutex.release()
+                print "execute() doesn't want to see executionMutex around anymore; it only reminds execute() of the death of its child office instance.\n"
                 continue
             
             #else if there was no exception....
@@ -200,9 +209,14 @@ class scriptRunner:
             executionSuccess = True
             #we won't get here if the job failed too many times because of the continue statement, so we don't need to worry about 
             self.executionMutex.release() #releasing the lock when it isn't locked.
+            print "execute() is setting executionMutex free.  Now that the job has succeeded, it no longer needs an emotional crutch.\n"
             break #if we made it this far, Open Office didn't crash, so we don't need to re-try.
         
         return executionSuccess
+    
+    def clear(self):
+        self.waitMutex = None
+        self.singleProcess = None
     
         
         

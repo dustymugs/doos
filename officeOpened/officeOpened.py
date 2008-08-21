@@ -59,9 +59,9 @@ class Server:
         #Create numsingleProcesses singleProcess's, indexed by an id.
         for i in range(numSingleProcesses):
             i = str(i)
+            self.watchdog.addThread(i)
             self.singleProcesses[i] = singleProcess( i, self )
             self.singleProcesses[i].start()
-            self.watchdog.addThread( i, self.singleProcesses[i].getPIDs() )
             
         self.watchdog.start()
             
@@ -192,7 +192,7 @@ class watchdog(threading.Thread):
                 self.clear()
             else:
                 processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
-                print "----------------\n" + "Watchdog sees the following process usage:\n" + str(processes) + "\n----------------\n"
+                print "----------------\n" + "Watchdog knows this:\n" + str(self.threads) + "\n----------------\n"
                 
                 try:
                     for threadId in self.threads.keys():
@@ -220,11 +220,11 @@ class watchdog(threading.Thread):
                                     
                                     officeOpenedUtils.kill(self.threads[threadId]["processes"], self.server.waitMutex)
                                     #release the threadsMutex so that deathNotify can restart the process and call watchdog.updateThread()
-                                    self.threadsMutex.release()
+                                    #self.threadsMutex.release()
                                     #need to call deathNotify() in case the OO instance dies after finishing the job but before watchdog is done
-                                    self.server.singleProcesses[threadId].deathNotify( self.threads[threadId]["processes"] )
+                                    #self.server.singleProcesses[threadId].deathNotify( self.threads[threadId]["processes"] )
                                     #now get threadsMutex back again
-                                    self.threadsMutex.acquire()
+                                    #self.threadsMutex.acquire()
                                     #restarting a thread takes so long that it makes sense to refresh information about the threads
                                     processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
                 #in case removeThread() got called while watchdog was running
@@ -294,20 +294,18 @@ class watchdog(threading.Thread):
             
         self.threadsMutex.release()
         
-    def addThread(self, threadId, processes):
+    def addThread(self, threadId, processes=[], ticketNumber='ready'):
         '''
         add the thread to watchdog's list.
         Optionally include processes to watch over, and include the thread's status or which job it's working on.
         '''
-        if processes == None:
-            processes = []
         print "addThread acquiring threadsMutex\n"
         self.threadsMutex.acquire()
         self.threads[threadId] = {} #define a key for the thread in watchdog's list
         self.threadsMutex.release()
         print "addThread released threadsMutex\n"
             
-        self.updateThread(threadId=threadId, processes=processes, ticket="ready", extensionsGranted=0)
+        self.updateThread(threadId=threadId, processes=processes, ticket=ticketNumber, extensionsGranted=0)
         
     def updateThread(self, threadId, processes=None, ticket=None, extensionsGranted=None):
         '''

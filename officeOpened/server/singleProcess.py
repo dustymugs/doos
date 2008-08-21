@@ -22,7 +22,7 @@ class singleProcess (threading.Thread):
         threading.Thread.__init__(self, name="singleProcess" + threadNumber)
         self.threadId = threadNumber
         self.server = server
-        self.ooScriptRunner = runScript.scriptRunner(self.threadId, home, self.server.waitMutex)
+        self.ooScriptRunner = runScript.scriptRunner(self.threadId, home, self.server.waitMutex, self)
         self.myKidsMutex = threading.Lock() #prevents conflicts between getPIDs() and deathNotify()
         self.shuttingDown = False
     
@@ -90,8 +90,10 @@ class singleProcess (threading.Thread):
             #self.myKidsMutex.acquire()
             newProcessList = self.ooScriptRunner.deathNotify(deadKids)
             #self.myKidsMutex.release()
-            
-            self.server.watchdog.updateThread( self.threadId, processes=self.getPIDs() )
+        
+        #deathNotify can return late, so we need to test again
+        #if not self.shuttingDown:    
+        #    self.server.watchdog.updateThread( self.threadId, processes=self.getPIDs() )
  
     def getPIDs(self):
         '''
@@ -126,4 +128,5 @@ class singleProcess (threading.Thread):
         officeOpenedUtils.kill([pids], self.server.waitMutex)
         
         self.server.watchdog.removeThread(self.threadId) #inform watchdog that this thread is shutting down
+        self.ooScriptRunner.clear()
         self.server = None
