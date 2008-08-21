@@ -192,7 +192,7 @@ class watchdog(threading.Thread):
                 self.clear()
             else:
                 processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
-                print "----------------\n" + "Watchdog knows this:\n" + str(self.threads) + "\n----------------\n"
+                print "----------------\n" + "Watchdog knows this at " + str(datetime.datetime.now().isoformat()) + ":\n" + str(self.threads) + "\n----------------\n"
                 
                 try:
                     for threadId in self.threads.keys():
@@ -219,12 +219,10 @@ class watchdog(threading.Thread):
                                     self.threads[threadId]["timestamp"] = datetime.datetime.now()
                                     
                                     officeOpenedUtils.kill(self.threads[threadId]["processes"], self.server.waitMutex)
-                                    #release the threadsMutex so that deathNotify can restart the process and call watchdog.updateThread()
-                                    #self.threadsMutex.release()
-                                    #need to call deathNotify() in case the OO instance dies after finishing the job but before watchdog is done
-                                    #self.server.singleProcesses[threadId].deathNotify( self.threads[threadId]["processes"] )
+                                    #release the threadsMutex so that the killed thread can restart and call updateThread()
+                                    self.threadsMutex.release()
                                     #now get threadsMutex back again
-                                    #self.threadsMutex.acquire()
+                                    self.threadsMutex.acquire()
                                     #restarting a thread takes so long that it makes sense to refresh information about the threads
                                     processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
                 #in case removeThread() got called while watchdog was running
