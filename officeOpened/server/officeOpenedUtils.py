@@ -100,6 +100,11 @@ def kill(drunkards, waitMutex, timeToDie=3.0):
         drunkards = [drunkards]
         
     checkList = [] #this list will be join()'d and passed to ps as the PIDs to investigate
+    
+    #acquire the right to call wait().  Don't want anyone else intercepting these kills.
+    print "kill longs for waitMutex\n"
+    waitMutex.acquire()
+    
     for clique in drunkards:
         drunkard = clique[0] #the first member of each list is the parent process
         print "SIGTERM:\t" + drunkard + "\n"
@@ -116,23 +121,20 @@ def kill(drunkards, waitMutex, timeToDie=3.0):
             print "Unknown exception while attempting to shutdown process " + drunkard + ": " + str(message) + "\n"
         finally:
             checkList += clique[1:]
-            
-    print "\n"
     
     #now give them timeToDie seconds to get out
     time.sleep(timeToDie)
-    
+
     #don't do all this if there are no processes to worry about
     if len(checkList) > 0:
-        #acquire the right to call wait()
-        waitMutex.acquire()
-        #TODO: modify this so that we call waitpid() for the ones we're interested in instead of ps
-        for drunkard in checkList:
+        for drunkard in list(checkList): #add the list() to make a copy of checkList, since we want to modify it
             try:
-                pid, exit = os.waitpid(int(drunkard), os.WNOHANG) #look for the death of a direct child of this process
-                checkList.remove(drunkard)
+                pid, exitStatus = os.waitpid(int(drunkard), os.WNOHANG) #look for the death of a direct child of this process
+                if str(pid) == drunkard:
+                    checkList.remove(drunkard) #this drunkard is gone, so we don't need to SIGKILL him
             except OSError, (value, message):
-                if value == 10:
+                if value == 10: #this means that this PID was not our child, so it was our grand-child and we don't have access to it
+                    checkList.remove(drunkard)
                     break
                 else:
                     raise OSError(value, message)
@@ -142,14 +144,13 @@ def kill(drunkards, waitMutex, timeToDie=3.0):
         ps = subprocess.Popen( ("ps", "--no-headers", "o", "pid", "--pid", ",".join(checkList) ), stdout=subprocess.PIPE)
         lingeringDrunkards = ps.communicate()[0].split("\n") #make a list of PIDs which are still alive
         '''
-        #release the wait mutex
-        waitMutex.release()
         
         #for drunkard in lingeringDrunkards[:-1]: #the last item of lingeringDrunkards = ''
         for drunkard in checkList:
             print "SIGKILL:\t" + drunkard + "\n"
             try:
-                os.kill ( int(drunkard), signal.SIGTERM ) #politely ask the drunkard to leave
+                os.kill ( int(drunkard), signal.SIGTERM ) #murder the drunkard
+                os.waitpid( int(drunkard), os.WNOHANG )
             except OSError, (value, message):
                 if value == 3: #the drunkard has already left
                     print "Notice: process " + drunkard + " is already dead; no SIGKILL necessary.\n"
@@ -157,5 +158,9 @@ def kill(drunkards, waitMutex, timeToDie=3.0):
                     print "Unknown OSError while attempting to SIGKILL process " + drunkard + ": " + message + "\n"
             except Exception, (message):
                 print "Unknown exception while attempting to SIGKILL process " + drunkard + ": " + str(message) + "\n"
-            
+                     
     print "\n"
+    
+    #release the wait mutex
+    waitMutex.release()
+    print "kill has sated its appetite for waitMutex\n"

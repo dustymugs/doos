@@ -56,7 +56,7 @@ class singleProcess (threading.Thread):
                 args = officeOpenedUtils.makeDictionary(args)
                 #now write the time that the file was taken out of the queue
                 file = open(home + 'files/output/' + str(ticketNumber) + '/status.txt', 'a')
-                file.write(datetime.now().isoformat() + "\n")
+                file.write('timeDequeued:' + datetime.now().isoformat() + "\n")
                 file.close()
                 #execution stage
                 success = self.ooScriptRunner.execute(dirpath, args)
@@ -87,24 +87,30 @@ class singleProcess (threading.Thread):
         The function will do nothing if self.clear() has been run (and we are therefore shutting down).
         '''
         if not self.shuttingDown:
-            self.myKidsMutex.acquire()
+            #self.myKidsMutex.acquire()
             newProcessList = self.ooScriptRunner.deathNotify(deadKids)
-            self.myKidsMutex.release()
+            #self.myKidsMutex.release()
             
             self.server.watchdog.updateThread( self.threadId, processes=self.getPIDs() )
  
     def getPIDs(self):
         '''
         Returns a list of the process IDs which the implemented class wants watchdog to watch.
-        They are returned in the following format:
+        If ANY of the watched processes dies, ALL of the thread's processes will be killed by
+        the watchdog and deathNotify will be passed.
+        
+        If you're running a set of processes which has a lot of short-lived children, only list 
+        the main parent's pid in your implementation of this function
+        
+        PIDs are returned in the following format:
         ["123", "4325", "2342"]
         '''
         #use the myKidsMutex so that deathNotify doesn't screw with this
-        self.myKidsMutex.acquire()
+        #self.myKidsMutex.acquire()
         
         myKids = self.ooScriptRunner.getPIDs()
         
-        self.myKidsMutex.release()
+        #self.myKidsMutex.release()
         return myKids
     
     def clear(self):

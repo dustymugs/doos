@@ -1,6 +1,8 @@
 '''
 TODO: add a property to overwrite any job with the same name, and also delete everything with same name at startup
     When a thread is launched, be sure to nuke the output folder in case any residual files are chilling there.
+    
+    MAJOR SECURITY FLAW:  MUST PREVENT STARBASIC SHELL COMMAND FROM RUNNING!  It's available to OO macros
 
     When a script is done running, zip it IN THE THREAD'S OUTPUT FOLDER, transfer the zip over the server's output folder, and nuke 
         the thread's output folder.
@@ -82,13 +84,14 @@ class scriptRunner:
         # since execute() can restart the office instance on its own if it sees that the instance is dead.
         for deadbaby in deadChildren:
             if deadbaby in familyTree:
-                
+                print "deathNotify can't stop thinking about executionMutex\n"
                 self.executionMutex.acquire()
-        
-                officeOpenedUtils.kill( [self.getPIDs()], self.waitMutex )
-                self.startOO()
                 
+                officeOpenedUtils.kill( self.getPIDs(), self.waitMutex )   
+                self.startOO()
+                print "deathNotify doesn't even care about execution"
                 self.executionMutex.release()
+                print "Mutex anymore.\n"
                 
                 break
             
@@ -122,14 +125,12 @@ class scriptRunner:
         file.write(pathCorrected)
         file.close()
         
-        self.executionMutex.acquire()
         executionSuccess = False
         #make two attempts at execution
         i = 1
         while (i <= self.maxDispatchAttempts):
-            #prevent OO from being restarted
-            
-            
+            #prevent OO from being restarted by anyone else
+            self.executionMutex.acquire()
             try:
                 # connect to the running office
                 self.ctx = self.resolver.resolve( "uno:pipe,name=officeOpenedPipe" + str(self.instanceId) + ";urp;StarOffice.ComponentContext" )
@@ -163,16 +164,21 @@ class scriptRunner:
                 self.ctx.ServiceManager
                 
                 print 'finished final UNO call at ' + datetime.datetime.utcnow().isoformat() + "\n"
-            
+            #if OpenOffice crashed
             except Exception, (message):
                 print "Open Office crashed (message: " + str(message) + ") during execution of job number " + \
                     ticketNumber + ".  " + str(self.maxDispatchAttempts - i) + " attempt(s) remaining before job is abandoned.\n"
-                officeOpenedUtils.kill( [self.getPIDs()], self.waitMutex )
+                #only the PIDs which this iteration of the loop started with can be returned by getPIDs, because 
+                #execute() has the executionMutex, which is necessary for deathNotify() to restart OO.
+                officeOpenedUtils.kill( self.getPIDs(), self.waitMutex )
                 self.startOO()
                 i += 1
+                #if OO died because watchdog killed it, watchdog is probably in runScript.deathNotify(), which is waiting for  
+                #executionMutex. Give it a chance to complete its calls and start monitoring again before re-acquiring the mutex.
+                self.executionMutex.release()
                 continue
             
-            
+            #else if there was no exception....
             else:
                 #We're done with the macro.  Now try to zip the file. 
                 try:
@@ -192,9 +198,9 @@ class scriptRunner:
         
                 print 'done'
             executionSuccess = True
+            #we won't get here if the job failed too many times because of the continue statement, so we don't need to worry about 
+            self.executionMutex.release() #releasing the lock when it isn't locked.
             break #if we made it this far, Open Office didn't crash, so we don't need to re-try.
-        
-        self.executionMutex.release()
         
         return executionSuccess
     

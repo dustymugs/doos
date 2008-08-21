@@ -182,9 +182,10 @@ class watchdog(threading.Thread):
         while not self.readyToExit:
             time.sleep(self.interval.seconds)
             
-            deadChildren = self.blackStork()
-            
+            #check to see if any children have died, and reap them if they have.  Then notify the parents.
+            self.blackStork()
             #need to acquire a lock here for the threads list since hatching and dying threads can modify this list
+            print "watchdog acquiring threadsMutex\n"
             self.threadsMutex.acquire()
             
             if self.threads == {}: #then all threads have been removed and it's time to shut down
@@ -193,36 +194,45 @@ class watchdog(threading.Thread):
                 processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
                 print "----------------\n" + "Watchdog sees the following process usage:\n" + str(processes) + "\n----------------\n"
                 
-                for threadId in self.threads.keys():
-                    #if this thread is processing a job, determine whether or not it's been running too long
-                    if not self.threads[threadId]['ticket'] is 'ready':
-                        #first add this interval's sample of the CPU usage
-                        self.threads[threadId]["cpu"] += processes[threadId][0]
-                        #if the job has been running longer than self.timeout seconds
-                        if self.timeout < ( datetime.datetime.now() - self.threads[threadId]["timestamp"] ):
-                            #if there haven't been too many extensions granted, and the average CPU usage has been at least self.minCPU
-                            if self.threads[threadId]["extensions granted"] < self.maxExtensions and \
-                                    self.threads[threadId]["cpu"] / ( self.timeout.seconds // self.interval.seconds ) > self.minCPU:
-                                self.threads[threadId]["extensions granted"] += 1 #note that another extension has been granted
-                                self.threads[threadId]["timestamp"] += self.timeout / 2 #pretends that the job started 1/2 of timeout later
-                            else:
-                                '''
-                                if this job's time has run out, kill the processes and deathNotify singleProcess.
-                                Reset the timestamp and the extensions granted.
-                                this will not become an infinite time extension because singleProcess will give up 
-                                on a job after too many failures.
-                                '''
-                                self.threads[threadId]["extensions granted"] = 0
-                                self.threads[threadId]["timestamp"] = datetime.datetime.now()
-                                
-                                officeOpenedUtils.kill(self.threads[threadId]["processes"], self.server.waitMutex)
-                                #give the thread an opportunity to call watchdog.updateThread()
-                                self.threadsMutex.release()
-                                #need to call deathNotify() in case the OO instance dies after finishing the job but before watchdog is done
-                                self.server.singleProcesses[threadId].deathNotify( self.threads[threadId]["processes"] )
-                                #need the lock back for the next iteration
-                                self.threadsMutex.acquire()
+                try:
+                    for threadId in self.threads.keys():
+                        print "Watchdog iterating for thread " + threadId + "\n"
+                        #if this thread is processing a job, determine whether or not it's been running too long
+                        if not self.threads[threadId]['ticket'] is 'ready':
+                            #first add this interval's sample of the CPU usage
+                            self.threads[threadId]["cpu"] += processes[threadId][0]
+                            #if the job has been running longer than self.timeout seconds
+                            if self.timeout < ( datetime.datetime.now() - self.threads[threadId]["timestamp"] ):
+                                #if there haven't been too many extensions granted, and the average CPU usage has been at least self.minCPU
+                                if self.threads[threadId]["extensions granted"] < self.maxExtensions and \
+                                        self.threads[threadId]["cpu"] / ( self.timeout.seconds // self.interval.seconds ) > self.minCPU:
+                                    self.threads[threadId]["extensions granted"] += 1 #note that another extension has been granted
+                                    self.threads[threadId]["timestamp"] += self.timeout / 2 #pretends that the job started 1/2 of timeout later
+                                else:
+                                    '''
+                                    This job's time has run out.  Kill the processes and deathNotify singleProcess.
+                                    Reset the timestamp and the extensions granted.
+                                    this will not become an infinite time extension because singleProcess will give up 
+                                    on a job after too many failures.
+                                    '''
+                                    self.threads[threadId]["extensions granted"] = 0
+                                    self.threads[threadId]["timestamp"] = datetime.datetime.now()
+                                    
+                                    officeOpenedUtils.kill(self.threads[threadId]["processes"], self.server.waitMutex)
+                                    #release the threadsMutex so that deathNotify can restart the process and call watchdog.updateThread()
+                                    self.threadsMutex.release()
+                                    #need to call deathNotify() in case the OO instance dies after finishing the job but before watchdog is done
+                                    self.server.singleProcesses[threadId].deathNotify( self.threads[threadId]["processes"] )
+                                    #now get threadsMutex back again
+                                    self.threadsMutex.acquire()
+                                    #restarting a thread takes so long that it makes sense to refresh information about the threads
+                                    processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
+                #in case removeThread() got called while watchdog was running
+                except KeyError:
+                    pass
+            #release the mutex so that runScript can deal with its dead child
             self.threadsMutex.release()
+            print "watchdog released threadsMutex\n";
             
     def clear(self):
         self.readyToExit = True
@@ -267,8 +277,6 @@ class watchdog(threading.Thread):
         
         if len(deadChildren) > 0:
             self.dropProcesses(deadChildren, True) #notify the watchdog that the process has died, which will then tell the thread
-            
-        return deadChildren
         
     
     def removeThread(self, threadId):
@@ -293,10 +301,11 @@ class watchdog(threading.Thread):
         '''
         if processes == None:
             processes = []
-            
+        print "addThread acquiring threadsMutex\n"
         self.threadsMutex.acquire()
         self.threads[threadId] = {} #define a key for the thread in watchdog's list
         self.threadsMutex.release()
+        print "addThread released threadsMutex\n"
             
         self.updateThread(threadId=threadId, processes=processes, ticket="ready", extensionsGranted=0)
         
@@ -308,6 +317,7 @@ class watchdog(threading.Thread):
             
         If a ticket is passed, reset the CPU usage sum and set the timestamp to right now
         '''
+        print "updateThread acquiring threadsMutex\n"
         self.threadsMutex.acquire()
         
         #only update the thread's status if the argument is not the keyword None
@@ -323,6 +333,7 @@ class watchdog(threading.Thread):
             self.threads[threadId]["extensions granted"] = extensionsGranted
         
         self.threadsMutex.release()
+        print "updateThread released threadsMutex\n"
         
     def dropProcesses(self, processes, notifyThread=True):
         '''
@@ -338,7 +349,7 @@ class watchdog(threading.Thread):
         #the list of dropped processes will be sent to the appropriate thread
         #dropped will store the dropped processes, grouped by threadId
         dropped = {}
-            
+        print "dropProcesses acquiring threadsMutex\n"
         self.threadsMutex.acquire()
         
         #search through all of the processes in each thread to see if this process was being watched
@@ -356,6 +367,7 @@ class watchdog(threading.Thread):
                         dropped[threadId].append(watched)
               
         self.threadsMutex.release()
+        print "dropProcesses released threadsMutex\n"
         
         #if notifyThread is False, dropped will be empty
         for threadId in dropped:
