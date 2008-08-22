@@ -38,7 +38,9 @@ class scriptRunner:
         self.startOO()
         
     def startOO(self):
-        
+        #acquire the right to read from subprocesses
+        #(even opening them through subprocess can cause a deadlock if two happen simultaneously)
+        self.waitMutex.acquire()
         #create a new OpenOffice process and have it listen on a pipe
         self.childOffice = \
             subprocess.Popen( ('soffice', "-accept=pipe,name=officeOpenedPipe" + str(self.instanceId) + ";urp;", "-headless", "-nofirststartwizard"), 
@@ -49,25 +51,28 @@ class scriptRunner:
         
         #OOo spawns a child process which we'll have to look out for.
         #now get the child process which has been spawned (need to kill -9 it in case anything goes wrong)
-        print "about to look for children of thread " + str(self.instanceId) + " with ppid= " + str(self.childOffice.pid) + "\n"
+        print "about to look for children of thread " + str(self.instanceId) + " with ppid= " + str(self.childOffice.pid)
         self.grandchildren = []
-        #acquire the right to call wait()
-        self.waitMutex.acquire()
+        
+        print 'startOO has acquired waitMutex'
         ps = subprocess.Popen(("ps", "--no-headers", "--ppid", str(self.childOffice.pid), "o", "pid"), \
                                         env={ "PATH": os.environ["PATH"]}, stdout=subprocess.PIPE)
+        print 'startOO opened the pipe'
         psOutput = ps.communicate()[0]
         #release the wait mutex
         self.waitMutex.release()
+        
+        print 'startOO has released the waitMutex'
+        
         for child in psOutput.split("\n")[:-1]: #the last element will be '' so drop it
             self.grandchildren.append(child.lstrip()) #needs to be a string rather than an int. Remove leading whitespace.
+        
+        print "done looking for children of thread " + str(self.instanceId) + ", found: '" + str(self.grandchildren) + "'\n\n"
         
         #inform the watchdog of the new process ids
         if not self.singleProcess is None:
             self.singleProcess.server.watchdog.updateThread( self.instanceId, processes=self.getPIDs() )
             
-        print "done looking for children of thread " + str(self.instanceId) + ", found: '" + str(self.grandchildren) + "'\n\n"
-
-        
         # get the uno component context from the PyUNO runtime
         localContext = uno.getComponentContext()
         
@@ -128,6 +133,8 @@ class scriptRunner:
         file = open(dirpath, 'r+') #open the passed macro
         #now rewrite instances of <<OUTDIR>> in the macro with the output location we want
         pathCorrected = file.read().replace('<<OUTDIR>>', self.home + 'output/' + ticketNumber)
+        #and do the same with <<INDIR>>
+        pathCorrected = pathCorrected.replace('<<INDIR>>', '/home/clint/OOo')
         file.truncate(0) #to make sure we overwrite the file
         file.write(pathCorrected)
         file.close()

@@ -18,7 +18,11 @@ while 1:
     args = 'prepareJob;initFunc=Main'
     # read from keyboard
     line = sys.stdin.readline()
-    if line == 'busy\n':
+    if line[:5] == 'file ':
+        file = open('/home/clint/OOo/' + line[5:-1] + '.script')
+        line = args + '::file start::' + file.read()
+        file.close()
+    elif line == 'busy\n':
         file = open('/home/clint/OOo/busy.script')
         line = args + '::file start::' + file.read()
         file.close()

@@ -196,6 +196,9 @@ class watchdog(threading.Thread):
                 
                 try:
                     for threadId in self.threads.keys():
+                        #give updateThread() a chance to run
+                        #self.threadsMutex.release()
+                        #self.threadsMutex.acquire()
                         print "Watchdog iterating for thread " + threadId + "\n"
                         #if this thread is processing a job, determine whether or not it's been running too long
                         if not self.threads[threadId]['ticket'] is 'ready':
@@ -220,9 +223,9 @@ class watchdog(threading.Thread):
                                     
                                     officeOpenedUtils.kill(self.threads[threadId]["processes"], self.server.waitMutex)
                                     #release the threadsMutex so that the killed thread can restart and call updateThread()
-                                    self.threadsMutex.release()
+                                    #self.threadsMutex.release()
                                     #now get threadsMutex back again
-                                    self.threadsMutex.acquire()
+                                    #self.threadsMutex.acquire()
                                     #restarting a thread takes so long that it makes sense to refresh information about the threads
                                     processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
                 #in case removeThread() got called while watchdog was running
