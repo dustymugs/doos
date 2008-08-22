@@ -6,6 +6,7 @@ import time
 import subprocess
 import os
 import signal
+import datetime
 
 def makeDictionary(argString):
     '''
@@ -123,21 +124,27 @@ def kill(drunkards, waitMutex, timeToDie=3.0):
             checkList += clique[1:]
     
     #now give them timeToDie seconds to get out
-    time.sleep(timeToDie)
+    judgmentDay = datetime.datetime.now() + datetime.timedelta(seconds=timeToDie)
 
-    #don't do all this if there are no processes to worry about
-    if len(checkList) > 0:
-        for drunkard in list(checkList): #add the list() to make a copy of checkList, since we want to modify it
-            try:
-                pid, exitStatus = os.waitpid(int(drunkard), os.WNOHANG) #look for the death of a direct child of this process
-                if str(pid) == drunkard:
-                    checkList.remove(drunkard) #this drunkard is gone, so we don't need to SIGKILL him
-            except OSError, (value, message):
-                if value == 10: #this means that this PID was not our child, so it was our grand-child and we don't have access to it
-                    checkList.remove(drunkard)
-                    break
-                else:
-                    raise OSError(value, message)
+    #keep checking around to see if the drunkards have left. The processes can run on for a long time, but
+    #come judgmentDay, the sinning processes will be judged and shall perish.
+    while datetime.datetime.now() < judgmentDay:
+        #don't do all this if there are no drunks left to worry about
+        if len(checkList) > 0:
+            #if there are still some lingering drunks, blink and look again.
+            time.sleep(0.25)
+            for drunkard in list(checkList): #add the list() to make a copy of checkList, since we want to modify it
+                try:
+                    pid, exitStatus = os.waitpid(int(drunkard), os.WNOHANG) #look for the death of a direct child of this process
+                    if str(pid) == drunkard:
+                        checkList.remove(drunkard) #this drunkard is gone, so we don't need to SIGKILL him
+                except OSError, (value, message):
+                    if value == 10: #this means that this PID was not our child, so it was (probably) our grand-child and we can't kill it
+                        checkList.remove(drunkard)
+                        break
+                    else:
+                        raise OSError(value, message)
+                    
                 
         '''
         #check to see if any drunkards are still lingering (by running ps and passing it the list of process IDs)
