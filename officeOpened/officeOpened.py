@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-An echo server that uses threads to handle multiple clients at a time.
+A process management server that uses threads to handle multiple jobs and clients at a time.
 Entering any line of input at the terminal will exit the server.
 
 When a client sends a job, he is assigned a ticket number which uniquely identifies the job in the system.
@@ -45,14 +45,14 @@ class Server:
         self.host = '' #socket.getsockname()
         self.port = 8568
         self.backlog = 100 #the maximum number of waiting socket connections
-        self.size = 4096
+        self.socketBufferSize = 4096
         self.server = None
         self.jobQueue = Queue()
         #this keeps track of which thread has which job
         self.singleProcesses = {}
         self.running = True
         self.input = []
-        self.watchdog = watchdog(self, interval=2, timeout=10)
+        self.watchdog = watchdog(self, interval=2, jobTimeout=10)
         self.waitMutex = threading.Lock()
         self.serverSocketTimeout = 30
         
@@ -163,12 +163,12 @@ class watchdog(threading.Thread):
                     to the parent and giving it an opportunity to bury its children.  Failing that, it'll send 
                     SIGKILL to whoever is still alive among the parent and its children.
     '''
-    def __init__(self, server, interval=5, timeout=30):
+    def __init__(self, server, interval=5, jobTimeout=30):
         threading.Thread.__init__(self, name="watchdog")
         self.interval = datetime.timedelta(seconds=interval) #the number of seconds for which watchdog sleeps after checking the threads
-        self.timeout = datetime.timedelta(seconds=timeout) #the normal length of time a job has to complete before being killed
-        self.maxExtensions = 1 #maximum number of time extensions over the timeout that can be given if the thread is still using the CPU
-        self.minCPU = 10.0 #the minimum average of the percent of the CPU which a thread must be using to be kept alive past the timeout
+        self.jobTimeout = datetime.timedelta(seconds=jobTimeout) #the normal length of time a job has to complete before being killed
+        self.maxExtensions = 1 #maximum number of time extensions over the jobTimeout that can be given if the thread is still using the CPU
+        self.minCPU = 10.0 #the minimum average of the percent of the CPU which a thread must be using to be kept alive past the jobTimeout
         self.threads = {} #information about the threads being watched over
         self.threadsMutex = threading.Lock()
         self.running = True
@@ -204,13 +204,13 @@ class watchdog(threading.Thread):
                         if not self.threads[threadId]['ticket'] is 'ready':
                             #first add this interval's sample of the CPU usage
                             self.threads[threadId]["cpu"] += processes[threadId][0]
-                            #if the job has been running longer than self.timeout seconds
-                            if self.timeout < ( datetime.datetime.now() - self.threads[threadId]["timestamp"] ):
+                            #if the job has been running longer than self.jobTimeout seconds
+                            if self.jobTimeout < ( datetime.datetime.now() - self.threads[threadId]["timestamp"] ):
                                 #if there haven't been too many extensions granted, and the average CPU usage has been at least self.minCPU
                                 if self.threads[threadId]["extensions granted"] < self.maxExtensions and \
-                                        self.threads[threadId]["cpu"] / ( self.timeout.seconds // self.interval.seconds ) > self.minCPU:
+                                        self.threads[threadId]["cpu"] / ( self.jobTimeout.seconds // self.interval.seconds ) > self.minCPU:
                                     self.threads[threadId]["extensions granted"] += 1 #note that another extension has been granted
-                                    self.threads[threadId]["timestamp"] += self.timeout / 2 #pretends that the job started 1/2 of timeout later
+                                    self.threads[threadId]["timestamp"] += self.jobTimeout / 2 #pretends that the job started 1/2 of jobTimeout later
                                 else:
                                     '''
                                     This job's time has run out.  Kill the processes and deathNotify singleProcess.
@@ -387,7 +387,7 @@ class requestHandler(threading.Thread):
     def __init__(self,client, server):
         threading.Thread.__init__(self, name="requestHandler")
         self.client = client
-        self.size = server.size
+        self.socketBufferSize = server.socketBufferSize
         self.server = server
         self.home = "/home/clint/officeOpened/homeDirectories/"
         client.setblocking(1)
@@ -396,7 +396,7 @@ class requestHandler(threading.Thread):
     def run(self):
         try:
             data_chunks = [] #we're just concatenating the chunks of data received, but this is faster than string concatenation
-            buf = self.client.recv(self.size)
+            buf = self.client.recv(self.socketBufferSize)
             bytesExpected = None
             bytesGotten = 0
             
@@ -416,7 +416,7 @@ class requestHandler(threading.Thread):
 
                 #if we're still determining the number of bytes to expect or we're still downloading the file,
                 if bytesExpected is None or bytesGotten < bytesExpected:
-                    buf = self.client.recv(self.size)  #get more data
+                    buf = self.client.recv(self.socketBufferSize)  #get more data
                 else:
                     break  #otherwise we're done.
             

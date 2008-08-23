@@ -1,17 +1,10 @@
 '''
-TODO: add a property to overwrite any job with the same name, and also delete everything with same name at startup
-    When a thread is launched, be sure to nuke the output folder in case any residual files are chilling there.
+This is the class which controls OpenOffice.  You can see from singleProcess.py which functions need to be implemented if you want to write 
+a class like this for another program.
+
+TODO:  When a thread is launched, be sure to nuke the output folder in case any residual files are chilling there.
     
     MAJOR SECURITY FLAW:  MUST PREVENT STARBASIC SHELL COMMAND FROM RUNNING!  It's available to OO macros
-
-    When a script is done running, zip it IN THE THREAD'S OUTPUT FOLDER, transfer the zip over the server's output folder, and nuke 
-        the thread's output folder.
-    
-    Change the script loading process so that the corrected script is stored inside the home directory and run from there.  This way,
-        if the server crashes while doing the path correction (updating <<OUTDIR>>, that is), it can restart the job with the input still
-        intact.
-        
-    Figure out how to tell whether OO crashed while processing a job
 '''
 
 import subprocess

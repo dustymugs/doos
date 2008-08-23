@@ -1,0 +1,96 @@
+# config.ini.default
+# 
+# DO NOT MODIFY THIS FILE.
+# If you want to make changes, copy this file and rename the copy to "config.ini", and modify that file from there.
+#
+# THIS FILE DOESN'T DO ANYTHING FOR THE TIME BEING
+#
+# workspace is a directory structure which must look like this:
+#
+# workspace/
+# 		files/
+#				input/
+#				output/
+#
+#		officeOpened0/
+#				.fontconfig/          -------------- .fontconfig and .openoffice.org2.0 are the config files needed for each instance of OO
+#				.openoffice.org2.0/   -------------- to run simultaneously (they all need their own copies of config files). 
+#				output 
+#		officeOpened1/
+#				.fontconfig/
+#				.openoffice.org2.0/
+#				output  ---------------------------- output stores the output files of macros while they're still being worked on
+#		officeOpened2/
+#				.fontconfig/
+#				.openoffice.org2.0/
+#				output
+#		officeOpened3/
+#				.fontconfig/
+#				.openoffice.org2.0/
+#				output
+#
+#		...(up to 'officeOpened' + numSingleProcesses)
+#
+
+workspace = "/home/clint/officeOpened/homeDirectories"
+
+#######################################
+# Server configuration
+#######################################
+
+# The number of child instances to create.  Note that there needs to be a folder for each of them as described above. Generally one should
+# have 1 singleProcess instance for every CPU core which you want to occupy.
+numSingleProcesses 4
+
+
+#### Sockets #####
+# Hostname of the server. If the host is left as '', the hostname will be determined by socket.getsockname()
+host ''
+
+port 8568
+
+# the allowable number of simultaneous socket connections
+backlog 100
+
+# the number of bytes for the network buffer to use.  This should be a fairly small number.
+socketBufferSize 4096
+
+# If there is a socket error on server startup, keep trying to open the socket for this many seconds.  This is different from uploadTimeout.
+serverSocketTimeout 30
+
+
+#######################################
+# Watchdog configuration
+#######################################
+
+# the number of seconds between each sampling
+interval 5
+
+# the number of seconds a job gets to run before it's evaluated for abortion. If the timeout has passed but the job is using a sufficient
+# amount of CPU time (minCPU as the percentage returned by the unix ps), the job will receive an extension of 1/2 the timeout before being 
+# evaluated again.  If the job has had too many extensions or if it hasn't been using much CPU time, it is aborted.
+jobTimeout 30
+maxExtensions 1
+minCPU 10.0
+
+
+######################################
+# Request Handler configuration
+######################################
+
+# the timeout while a client is uploading a job
+uploadTimeout 60
+
+# the range of integers from which to choose a ticket number (remember that these will be filenames on the filesystem)
+minTicketNumber 0
+maxTicketNumber 15999999
+
+
+
+
+########################################################################################
+# doosbags to load
+#
+# TODO: The server will look for these in the doosbags folder where the server is installed.
+########################################################################################
+#doosbag OOoMacroRunner
