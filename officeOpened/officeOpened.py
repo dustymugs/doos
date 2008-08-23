@@ -46,6 +46,8 @@ class Server:
         self.port = 8568
         self.backlog = 100 #the maximum number of waiting socket connections
         self.socketBufferSize = 4096
+        self.logfile = open('/home/clint/officeOpened/homeDirectories/logs/server.log', 'a')
+        self.logMutex = threading.Lock()
         self.server = None
         self.jobQueue = Queue()
         #this keeps track of which thread has which job
@@ -56,15 +58,29 @@ class Server:
         self.waitMutex = threading.Lock()
         self.serverSocketTimeout = 30
         
+        self.log("Starting " + str(numSingleProcesses) + " singleProcess instances.")
+        
         #Create numsingleProcesses singleProcess's, indexed by an id.
         for i in range(numSingleProcesses):
             i = str(i)
+            self.log("Starting thread 'singleProcess" + i + "'.")
             self.watchdog.addThread(i)
             self.singleProcesses[i] = singleProcess( i, self )
             self.singleProcesses[i].start()
-            
+        
+        self.log("Starting thread 'watchdog'.")
         self.watchdog.start()
-            
+    
+    def log(self, message, level="information"):
+        '''
+        Log message to the server's logfile, preceeded by a timestamp and a severity level
+        '''
+        timeLogged = datetime.datetime.now().isoformat()
+        self.logMutex.acquire()
+        self.logfile.write( timeLogged + '\t' + str(level) + '\t' + str(message) + "\n")
+        self.logfile.flush() #be sure to flush the message out to the logfile
+        self.logMutex.release()
+        
     def terminate(self):
         self.running = False
 
@@ -77,27 +93,27 @@ class Server:
                 break
             except socket.error, (value, message):
                 if self.serverSocketTimeout > 0:
-                    print "Socket error. Retrying in 2 seconds...\n"
+                    self.log("Socket error. Retrying in 2 seconds...", "error\t")
                     time.sleep(2)
                     self.serverSocketTimeout -= 2
                 else:
-                    print "Could not open server listening socket: Connection attempts timed out.\n"
+                    self.log("Could not open server listening socket: Connection attempts timed out.", "abort")
                     self.server = None
                     break
             except Exception, (message):
-                print "Could not open server listening socket: " + str(message) + "\n"
+                self.log("Could not open server listening socket: " + str(message), "abort")
                 break
         
         if self.server is not None:        
+            self.log("Server listening on port " + str(self.port))
             #start the singleProcess threads
-            self.input = [self.server,sys.stdin]
+            self.input = [self.server]
             running = 1
             while self.running:
                 #choose among the input sources which are ready to give data.  Choosing between stdin, the server socket, and established client connections
                 inputready,outputready,exceptready = select.select(self.input,[],[])
                 
                 for s in inputready:
-                    #print 'Got input: ' + str(s) + '\n'
                     if not running:
                         break
                         
@@ -109,26 +125,26 @@ class Server:
                             client.setblocking(0)
                         except socket.error, (value, message):
                             #do nothing--we've probably just connected without the client having sent any data
-                            print 'Error connecting to client:\n' + str(value) + "\n" + str(message)
+                            self.log('Error connecting to client:\n' + str(value) + "\n" + str(message), 'error\t')
                     
                     #a connected client has sent data for us to process
                     elif type(s) == type(self.server): #if it's not the server socket, but it is a socket,
                         grabber = requestHandler (s, self)  #create a thread to handle the request
                         self.input.remove ( s ) #tell the server thread to stop looking for input on this socket
                         grabber.start()
-    
-                    elif s == sys.stdin:
-                        # handle standard input
-                        junk = sys.stdin.readline()
-                        self.running = 0
                         
             self.server.close()
         #exiting gracefully; allow all threads to finish before closing
         # close all threads
+        self.log("Queueing 'terminate' for each singleProcess instance.")
         for c in self.singleProcesses:
             self.jobQueue.put( 'terminate', True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
         self.jobQueue.join()
         #the watchdog will shut itself down when all threads have removed themselves from its list.
+        
+        
+    def __del__(self):
+        self.logfile.close()
 
 class watchdog(threading.Thread):
     '''
@@ -174,6 +190,7 @@ class watchdog(threading.Thread):
         self.running = True
         self.readyToExit = False #this is for the main thread's wait() loop. When all children have been reaped, this will be True
         self.server = server
+        self.log = server.log
         
     def run(self):
         '''
@@ -185,21 +202,15 @@ class watchdog(threading.Thread):
             #check to see if any children have died, and reap them if they have.  Then notify the parents.
             self.blackStork()
             #need to acquire a lock here for the threads list since hatching and dying threads can modify this list
-            print "watchdog acquiring threadsMutex\n"
             self.threadsMutex.acquire()
             
             if self.threads == {}: #then all threads have been removed and it's time to shut down
                 self.clear()
             else:
                 processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
-                print "----------------\n" + "Watchdog knows this at " + str(datetime.datetime.now().isoformat()) + ":\n" + str(self.threads) + "\n----------------\n"
                 
                 try:
                     for threadId in self.threads.keys():
-                        #give updateThread() a chance to run
-                        #self.threadsMutex.release()
-                        #self.threadsMutex.acquire()
-                        print "Watchdog iterating for thread " + threadId + "\n"
                         #if this thread is processing a job, determine whether or not it's been running too long
                         if not self.threads[threadId]['ticket'] is 'ready':
                             #first add this interval's sample of the CPU usage
@@ -218,27 +229,24 @@ class watchdog(threading.Thread):
                                     this will not become an infinite time extension because singleProcess will give up 
                                     on a job after too many failures.
                                     '''
+                                    self.log("Watchdog is killing job " + self.threads[threadId]["ticket"] + " in thread " + \
+                                             threadId + " for taking too long.")
                                     self.threads[threadId]["extensions granted"] = 0
                                     self.threads[threadId]["timestamp"] = datetime.datetime.now()
                                     
                                     officeOpenedUtils.kill(self.threads[threadId]["processes"], self.server.waitMutex)
-                                    #release the threadsMutex so that the killed thread can restart and call updateThread()
-                                    #self.threadsMutex.release()
-                                    #now get threadsMutex back again
-                                    #self.threadsMutex.acquire()
                                     #restarting a thread takes so long that it makes sense to refresh information about the threads
                                     processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
-                #in case removeThread() got called while watchdog was running
+                #in case removeThread() was called while watchdog was running
                 except KeyError:
                     pass
             #release the mutex so that runScript can deal with its dead child
             self.threadsMutex.release()
-            print "watchdog released threadsMutex\n";
             
     def clear(self):
         self.readyToExit = True
         self.server = None
-        #self.blackStork.join(30)
+        self.log("Watchdog shutting down...")
         
     def blackStork(self):
         '''
@@ -274,7 +282,7 @@ class watchdog(threading.Thread):
             if pid == 0:
                 break
             deadChildren.append( str(pid) )
-            print "Child " + str(pid) + " has died.  So it goes.\n"
+            self.log("Child " + str(pid) + " has died.", 'error\t')
         
         if len(deadChildren) > 0:
             self.dropProcesses(deadChildren, True) #notify the watchdog that the process has died, which will then tell the thread
@@ -289,9 +297,11 @@ class watchdog(threading.Thread):
         try:
             del self.threads[threadId]
         except KeyError: #if that threadId doesn't exist in the dictionary
-            print "watchdog failed to remove threadId '" + threadId + "' because it is not in its list.\n"
+            self.log("watchdog failed to remove threadId '" + threadId + "' because it is not in its list.", 'error\t')
         except Exception, (message):
-            print "watchdog failed to remove threadId '" + threadId + "': " + str(message)
+            self.log("watchdog failed to remove threadId '" + threadId + "': " + str(message), 'error\t' )
+        else:
+            self.log("watchdog removed thread " + threadId)
             
         self.threadsMutex.release()
         
@@ -300,11 +310,11 @@ class watchdog(threading.Thread):
         add the thread to watchdog's list.
         Optionally include processes to watch over, and include the thread's status or which job it's working on.
         '''
-        print "addThread acquiring threadsMutex\n"
         self.threadsMutex.acquire()
         self.threads[threadId] = {} #define a key for the thread in watchdog's list
         self.threadsMutex.release()
-        print "addThread released threadsMutex\n"
+        
+        self.log("watchdog added thread " + threadId)
             
         self.updateThread(threadId=threadId, processes=processes, ticket=ticketNumber, extensionsGranted=0)
         
@@ -316,7 +326,6 @@ class watchdog(threading.Thread):
             
         If a ticket is passed, reset the CPU usage sum and set the timestamp to right now
         '''
-        print "updateThread acquiring threadsMutex\n"
         self.threadsMutex.acquire()
         
         #only update the thread's status if the argument is not the keyword None
@@ -332,7 +341,6 @@ class watchdog(threading.Thread):
             self.threads[threadId]["extensions granted"] = extensionsGranted
         
         self.threadsMutex.release()
-        print "updateThread released threadsMutex\n"
         
     def dropProcesses(self, processes, notifyThread=True):
         '''
@@ -348,7 +356,6 @@ class watchdog(threading.Thread):
         #the list of dropped processes will be sent to the appropriate thread
         #dropped will store the dropped processes, grouped by threadId
         dropped = {}
-        print "dropProcesses acquiring threadsMutex\n"
         self.threadsMutex.acquire()
         
         #search through all of the processes in each thread to see if this process was being watched
@@ -366,7 +373,6 @@ class watchdog(threading.Thread):
                         dropped[threadId].append(watched)
               
         self.threadsMutex.release()
-        print "dropProcesses released threadsMutex\n"
         
         #if notifyThread is False, dropped will be empty
         for threadId in dropped:
@@ -389,12 +395,19 @@ class requestHandler(threading.Thread):
         self.client = client
         self.socketBufferSize = server.socketBufferSize
         self.server = server
+        self.log = self.server.log
         self.home = "/home/clint/officeOpened/homeDirectories/"
         client.setblocking(1)
         client.settimeout(60.0)
+        #try to find the remote machine's IP address
+        try:
+            self.remoteHostName = str( self.client.getpeername() )
+        except Exception, (message):
+            self.remoteHostName = "-system does not support getpeername()-"
 
     def run(self):
         try:
+            self.log("Client connected from " + self.remoteHostName)
             data_chunks = [] #we're just concatenating the chunks of data received, but this is faster than string concatenation
             buf = self.client.recv(self.socketBufferSize)
             bytesExpected = None
@@ -442,6 +455,7 @@ class requestHandler(threading.Thread):
                 try:
                     self.client.sendall( "shutting down...\n" )
                 finally:
+                    self.log("Received shutdown command from '" + self.remoteHostName + "'.")
                     self.server.terminate() #tell the server to shut down all threads
             
             #if they want to put it in the queue, dump the data to a file and enqueue
@@ -454,18 +468,21 @@ class requestHandler(threading.Thread):
                 
                 if status == jobStatus.notFound:
                     self.client.sendall( "STATUS " + str(status) + ": " + str(logfile) )
+                    self.log("Sent 'ticket not found' for ticket '" + args['ticket'] + "' to '" + self.remoteHostName + "'.", 'error\t')
                 elif (args.has_key('returnJob') and args['returnJob']) and status == jobStatus.done:
+                    #this function handles its own logging.
                     self.returnJob( args['ticket'] )
                 else:
                     self.client.sendall(logfile)
+                    self.log("Sent status for ticket '" + args['ticket'] + "' to '" + self.remoteHostName + "'.")
             else:
                 self.client.sendall("STATUS " + jobStatus.error + ": Unknown command\n")
                 
                 
         except socket.error, (message):
-            print "Socket error:\n" + str(message) + "\n"
+            self.log("Socket error for host '" + self.remoteHostName + "': " + str(message), "error\t" )
         except Exception, (message):
-            print str(message)
+            self.log("Unknown error for host '" + self.remoteHostName + "': " + str(message), 'error\t')
         finally:
             #now close the connection 
             self.client.close()
@@ -505,12 +522,10 @@ class requestHandler(threading.Thread):
                 try:
                     self.client.sendall('STATUS ' + str(jobStatus.error) + ": " + str(message))
                 except Exception, (message):
-                    print "Unknown Error: " + str(message)
-        
-        except socket.error, (message):
-            print "Socket Error: " + str(message)
+                    self.log("Unknown error reading output for ticket " + ticket + ": " + str(message), "error\t" )
+                    
         except Exception, (message):
-            print "Unknown Error: " + str(message)
+            self.log("Unknown error reading output for ticket " + ticket + ": " + str(message), "error\t" )
         
         #So now we have the data (or failure).  Let's send the data back to the client.
         try:
@@ -518,9 +533,11 @@ class requestHandler(threading.Thread):
                 for file in data:
                     self.client.sendall( file[0] + "::file start::" + file[1] + "::fileEnd")
         except socket.error, (message):
-            print "Socket Error: " + str(message)
+            self.log("Socket error sending output for ticket '" + ticket + "' to '" + self.remoteHostName + "': " + str(message), "error\t" )
         except Exception, (message):
-            print "Unknown Error: " + str(message)
+            self.log("Unknown error sending output for ticket '" + ticket + "' to '" + self.remoteHostName + "': " + str(message), "error\t" )
+        else:
+            self.log("Successfully sent output for ticket '" + ticket + "' to '" + self.remoteHostName + "'.")
     
     def stat(self, ticket):
         try:
@@ -575,6 +592,7 @@ class requestHandler(threading.Thread):
         #finally, put the data into the queue
         self.server.jobQueue.put( dirpath, True )
         self.client.sendall( "transmission ok\nticket number:" + filename + "\n")
+        self.log("Job '" + filename + "' entered into queue.  Received from '" + self.remoteHostName + "'.")
         
 if __name__ == "__main__":
     s = Server()

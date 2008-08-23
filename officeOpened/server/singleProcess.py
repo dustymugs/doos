@@ -22,6 +22,7 @@ class singleProcess (threading.Thread):
         threading.Thread.__init__(self, name="singleProcess" + threadNumber)
         self.threadId = threadNumber
         self.server = server
+        self.log = server.log
         self.ooScriptRunner = runScript.scriptRunner(self.threadId, home, self.server.waitMutex, self)
         self.myKidsMutex = threading.Lock() #prevents conflicts between getPIDs() and deathNotify()
         self.shuttingDown = False
@@ -33,12 +34,11 @@ class singleProcess (threading.Thread):
         passed).
         '''
         while 1:
-            print 'Thread ' + str(self.threadId) + " is at the labor exchange, looking for a yob.\n"
             dirpath = self.server.jobQueue.get(True) #block this thread's execution until it gets something from the queue
             
             #if dirpath is just 'terminate', then the server is telling the thread to shut down gracefully
             if dirpath == 'terminate':
-                print 'Thread ' + str(self.threadId) + ' exiting gracefully...\n'
+                self.log('Thread ' + str(self.threadId) + ' exiting gracefully...')
                 self.server.jobQueue.task_done()
                 self.clear()
                 break
@@ -65,8 +65,10 @@ class singleProcess (threading.Thread):
                 
                 if success:
                     file.write('timeCompleted:')
+                    self.log('Thread ' + self.threadId + ' successfully processed job ' + ticketNumber)
                 else:
                     file.write('timeFailed:')
+                    self.log('Thread ' + self.threadId + ' has abandoned job ' + ticketNumber, 'error\t')
                 
                 file.write( datetime.now().isoformat() + "\n" )
                 file.close()
@@ -87,13 +89,9 @@ class singleProcess (threading.Thread):
         The function will do nothing if self.clear() has been run (and we are therefore shutting down).
         '''
         if not self.shuttingDown:
-            #self.myKidsMutex.acquire()
+            self.myKidsMutex.acquire()
             newProcessList = self.ooScriptRunner.deathNotify(deadKids)
-            #self.myKidsMutex.release()
-        
-        #deathNotify can return late, so we need to test again
-        #if not self.shuttingDown:    
-        #    self.server.watchdog.updateThread( self.threadId, processes=self.getPIDs() )
+            self.myKidsMutex.release()
  
     def getPIDs(self):
         '''
@@ -108,11 +106,10 @@ class singleProcess (threading.Thread):
         ["123", "4325", "2342"]
         '''
         #use the myKidsMutex so that deathNotify doesn't screw with this
-        #self.myKidsMutex.acquire()
-        
+        self.myKidsMutex.acquire()
         myKids = self.ooScriptRunner.getPIDs()
+        self.myKidsMutex.release()
         
-        #self.myKidsMutex.release()
         return myKids
     
     def clear(self):

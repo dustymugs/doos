@@ -1,5 +1,6 @@
 '''
 Utility functions for officeOpened and its components
+TODO: find a way to get the logging function in here
 '''
 
 import time
@@ -103,23 +104,22 @@ def kill(drunkards, waitMutex, timeToDie=3.0):
     checkList = [] #this list will be join()'d and passed to ps as the PIDs to investigate
     
     #acquire the right to call wait().  Don't want anyone else intercepting these kills.
-    print "kill longs for waitMutex\n"
     waitMutex.acquire()
     
     for clique in drunkards:
         drunkard = clique[0] #the first member of each list is the parent process
-        print "SIGTERM:\t" + drunkard + "\n"
         try:
             checkList.append(drunkard)
             os.kill ( int(drunkard), signal.SIGTERM ) #politely ask the drunkard to leave and take his friends with him
         except OSError, (value, message):
             if value == 3: #the drunkard has already left
-                print "Notice: process " + drunkard + " is already dead.\n"
                 checkList.remove(drunkard) #if he's already gone, scratch him off your list
             else:
-                print "Unknown OSError while attempting to shutdown process " + drunkard + ": " + message + "\n"
+                #print "Unknown OSError while attempting to shutdown process " + drunkard + ": " + message + "\n"
+                pass
         except Exception, (message):
-            print "Unknown exception while attempting to shutdown process " + drunkard + ": " + str(message) + "\n"
+            #print "Unknown exception while attempting to shutdown process " + drunkard + ": " + str(message) + "\n"
+            pass
         finally:
             checkList += clique[1:]
     
@@ -154,20 +154,19 @@ def kill(drunkards, waitMutex, timeToDie=3.0):
         
         #for drunkard in lingeringDrunkards[:-1]: #the last item of lingeringDrunkards = ''
         for drunkard in checkList:
-            print "SIGKILL:\t" + drunkard + "\n"
             try:
                 os.kill ( int(drunkard), signal.SIGTERM ) #murder the drunkard
                 os.waitpid( int(drunkard), os.WNOHANG )
             except OSError, (value, message):
                 if value == 3: #the drunkard has already left
-                    print "Notice: process " + drunkard + " is already dead; no SIGKILL necessary.\n"
+                    #print "Notice: process " + drunkard + " is already dead; no SIGKILL necessary.\n"
+                    pass
                 else:
-                    print "Unknown OSError while attempting to SIGKILL process " + drunkard + ": " + message + "\n"
+                    #print "Unknown OSError while attempting to SIGKILL process " + drunkard + ": " + message + "\n"
+                    pass
             except Exception, (message):
-                print "Unknown exception while attempting to SIGKILL process " + drunkard + ": " + str(message) + "\n"
+                #print "Unknown exception while attempting to SIGKILL process " + drunkard + ": " + str(message) + "\n"
+                pass
                      
-    print "\n"
-    
     #release the wait mutex
     waitMutex.release()
-    print "kill has sated its appetite for waitMutex\n"

@@ -27,6 +27,7 @@ class scriptRunner:
         self.executionMutex = threading.Lock()
         self.maxDispatchAttempts = 2
         self.singleProcess = singleProcess
+        self.log = singleProcess.server.log
         
         self.startOO()
         
@@ -44,23 +45,16 @@ class scriptRunner:
         
         #OOo spawns a child process which we'll have to look out for.
         #now get the child process which has been spawned (need to kill -9 it in case anything goes wrong)
-        print "about to look for children of thread " + str(self.instanceId) + " with ppid= " + str(self.childOffice.pid)
         self.grandchildren = []
         
-        print 'startOO has acquired waitMutex'
         ps = subprocess.Popen(("ps", "--no-headers", "--ppid", str(self.childOffice.pid), "o", "pid"), \
                                         env={ "PATH": os.environ["PATH"]}, stdout=subprocess.PIPE)
-        print 'startOO opened the pipe'
         psOutput = ps.communicate()[0]
         #release the wait mutex
         self.waitMutex.release()
         
-        print 'startOO has released the waitMutex'
-        
         for child in psOutput.split("\n")[:-1]: #the last element will be '' so drop it
             self.grandchildren.append(child.lstrip()) #needs to be a string rather than an int. Remove leading whitespace.
-        
-        print "done looking for children of thread " + str(self.instanceId) + ", found: '" + str(self.grandchildren) + "'\n\n"
         
         #inform the watchdog of the new process ids
         if not self.singleProcess is None:
@@ -72,6 +66,8 @@ class scriptRunner:
         # create the UnoUrlResolver
         self.resolver = localContext.ServiceManager.createInstanceWithContext(
                         "com.sun.star.bridge.UnoUrlResolver", localContext )
+        
+        self.log("Done initializing OpenOffice for thread " + self.instanceId)
         
     def deathNotify(self, deadChildren):
         '''
@@ -89,14 +85,11 @@ class scriptRunner:
         # since execute() can restart the office instance on its own if it sees that the instance is dead.
         for deadbaby in deadChildren:
             if deadbaby in familyTree:
-                print "deathNotify can't stop thinking about executionMutex\n"
                 self.executionMutex.acquire()
-                
+                self.log("Thread " + self.instanceId + "'s OpenOffice instance has died. Restarting it.", 'error\t')
                 officeOpenedUtils.kill( familyTree, self.waitMutex )   
                 self.startOO()
-                print "deathNotify doesn't even care about execution"
                 self.executionMutex.release()
-                print "Mutex anymore.\n"
                 
                 break
             
@@ -120,7 +113,8 @@ class scriptRunner:
         ticketNumber = str(ticketNumber)
         
         if not args.has_key('initFunc'):
-            raise Exception( "initFunc was not defined by client for ticket " + ticketNumber + "\n" )
+            self.log( "Thread " + self.instanceId + " says: initFunc was not defined by client for ticket " + ticketNumber, 'error\t' )
+            return false
         
         dirpath += '.data' #add .data to the end of the ticket number to get the macro's filename
         file = open(dirpath, 'r+') #open the passed macro
@@ -137,19 +131,15 @@ class scriptRunner:
         i = 1
         while (i <= self.maxDispatchAttempts):
             #prevent OO from being restarted by anyone else
-            print "execute() wants executionMutex in its life.\n"
             self.executionMutex.acquire()
             try:
                 # connect to the running office
                 self.ctx = self.resolver.resolve( "uno:pipe,name=officeOpenedPipe" + str(self.instanceId) + ";urp;StarOffice.ComponentContext" )
-                print 'connected\n'
                 
                 # get the central desktop object
                 self.desktop = self.ctx.ServiceManager.createInstanceWithContext( "com.sun.star.frame.Desktop",self.ctx)
-                print 'got central desktop object\n'
             
                 self.dispatchHelper = self.ctx.ServiceManager.createInstanceWithContext( "com.sun.star.frame.DispatchHelper", self.ctx )
-                print 'created dispatch helper\n'
                 
                 properties = []
                 p = PropertyValue()
@@ -160,7 +150,6 @@ class scriptRunner:
         
                 self.dispatchHelper.executeDispatch(self.desktop, 'macro:///AutoOOo.OOoCore.runScript(' + dirpath + ',' \
                                                      + args["initFunc"] + ')', "", 0, properties) 
-                print 'executed dispatch\nPerforming final UNO call. Current time: ' + datetime.datetime.utcnow().isoformat() + "\n"
                 
                 # As quoted from the PyUno tutorial:
                 # Do a nasty thing before exiting the python process. In case the
@@ -171,11 +160,13 @@ class scriptRunner:
                 # I do this here by calling a cheap synchronous call (getPropertyValue).
                 self.ctx.ServiceManager
                 
-                print 'finished final UNO call at ' + datetime.datetime.utcnow().isoformat() + "\n"
+                self.log('Thread ' + self.instanceId + "'s OpenOffice is finished with job " + ticketNumber + '.  Now packaging...')
+                
             #if OpenOffice crashed
             except Exception, (message):
-                print "Open Office crashed (message: " + str(message) + ") during execution of job number " + \
-                    ticketNumber + ".  " + str(self.maxDispatchAttempts - i) + " attempt(s) remaining before job is abandoned.\n"
+                self.log("Open Office crashed for thread " + self.instanceId + " (message: " + str(message) + \
+                         ") during execution of job number " + \
+                    ticketNumber + ".  " + str(self.maxDispatchAttempts - i) + " attempt(s) remaining before job is abandoned.\n", 'error\t')
                 #only the PIDs which this iteration of the loop started with can be returned by getPIDs, because 
                 #execute() has the executionMutex, which is necessary for deathNotify() to restart OO.
                 officeOpenedUtils.kill( self.getPIDs(), self.waitMutex )
@@ -184,7 +175,6 @@ class scriptRunner:
                 #if OO died because watchdog killed it, watchdog is probably in runScript.deathNotify(), which is waiting for  
                 #executionMutex. Give it a chance to complete its calls and start monitoring again before re-acquiring the mutex.
                 self.executionMutex.release()
-                print "execute() doesn't want to see executionMutex around anymore; it only reminds execute() of the death of its child office instance.\n"
                 continue
             
             #else if there was no exception....
@@ -201,15 +191,14 @@ class scriptRunner:
                     #if the zip was successful, move it to homeDirectories/output/ticketNumber/files.zip
                     shutil.move(self.home + 'output/' + ticketNumber + '.zip', self.home + '../files/output/' + ticketNumber + '/files.zip')
                 except Exception, (message):
-                    print "Error writing zip file:\n" + str(message) + "\nMoving output folder instead.\n"
+                    self.log("Thread " + self.instanceId + " encountered an error while writing the zip file for ticket " + \
+                             ticketNumber + ":\n" + str(message) + "\nMoving output folder instead.\n", 'error\t')
                     #move the output files into the server-wide output folder, homeDirectories/output/ticketNumber/files
                     shutil.move(self.home + 'output/' + ticketNumber, self.home + '../files/output/' + ticketNumber + '/files')
         
-                print 'done'
             executionSuccess = True
             #we won't get here if the job failed too many times because of the continue statement, so we don't need to worry about 
             self.executionMutex.release() #releasing the lock when it isn't locked.
-            print "execute() is setting executionMutex free.  Now that the job has succeeded, it no longer needs an emotional crutch.\n"
             break #if we made it this far, Open Office didn't crash, so we don't need to re-try.
         
         return executionSuccess

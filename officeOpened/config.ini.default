@@ -8,6 +8,7 @@
 # workspace is a directory structure which must look like this:
 #
 # workspace/
+#		logs/
 # 		files/
 #				input/
 #				output/
@@ -15,19 +16,19 @@
 #		officeOpened0/
 #				.fontconfig/          -------------- .fontconfig and .openoffice.org2.0 are the config files needed for each instance of OO
 #				.openoffice.org2.0/   -------------- to run simultaneously (they all need their own copies of config files). 
-#				output 
+#				output/ 
 #		officeOpened1/
 #				.fontconfig/
 #				.openoffice.org2.0/
-#				output  ---------------------------- output stores the output files of macros while they're still being worked on
+#				output/  ---------------------------- output stores the output files of macros while they're still being worked on
 #		officeOpened2/
 #				.fontconfig/
 #				.openoffice.org2.0/
-#				output
+#				output/
 #		officeOpened3/
 #				.fontconfig/
 #				.openoffice.org2.0/
-#				output
+#				output/
 #
 #		...(up to 'officeOpened' + numSingleProcesses)
 #
