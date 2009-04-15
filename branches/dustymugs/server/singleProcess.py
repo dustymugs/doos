@@ -5,7 +5,7 @@ import hashlib
 import os
 import signal
 from server import utils
-from officeController import runScript
+from controller import runScript
 from datetime import datetime
 
 home = '/home/clint/officeOpened/homeDirectories/'
