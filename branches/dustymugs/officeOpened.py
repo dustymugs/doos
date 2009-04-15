@@ -35,7 +35,7 @@ import threading
 from Queue import Queue
 import hashlib
 from server.singleProcess import singleProcess
-from server import officeOpenedUtils
+from server import utils.py
 import random
 import datetime
 import time
@@ -46,12 +46,14 @@ class Server:
         self.port = 8568
         self.backlog = 100 #the maximum number of waiting socket connections
         self.socketBufferSize = 4096
-        self.logfile = open('/home/clint/officeOpened/homeDirectories/logs/server.log', 'a')
+        self.logfile = open('/home/dustymugs/Work/OOo/doos-dustymugs/home/logs/server.log', 'a')
         self.logMutex = threading.Lock()
         self.server = None
         self.jobQueue = Queue()
+
         #this keeps track of which thread has which job
         self.singleProcesses = {}
+
         self.running = True
         self.input = []
         self.watchdog = watchdog(self, interval=2, jobTimeout=10)
@@ -72,9 +74,7 @@ class Server:
         self.watchdog.start()
     
     def log(self, message, level="information"):
-        '''
-        Log message to the server's logfile, preceeded by a timestamp and a severity level
-        '''
+        # Log message to the server's logfile, preceeded by a timestamp and a severity level
         timeLogged = datetime.datetime.now().isoformat()
         self.logMutex.acquire()
         self.logfile.write( timeLogged + '\t' + str(level) + '\t' + str(message) + "\n")
@@ -175,7 +175,7 @@ class watchdog(threading.Thread):
     ]    (etc.)  
                     where the index is the thread id, and parent and child are string representations of process IDs
                     The PID of the parent process always goes first in the "processes" list.
-                    The purpose of differentiating the parent is so that officeOpenedUtils.kill() can send SIGTERM
+                    The purpose of differentiating the parent is so that utils.kill() can send SIGTERM
                     to the parent and giving it an opportunity to bury its children.  Failing that, it'll send 
                     SIGKILL to whoever is still alive among the parent and its children.
     '''
@@ -193,9 +193,7 @@ class watchdog(threading.Thread):
         self.log = server.log
         
     def run(self):
-        '''
-        The main execution function for watchdog
-        '''
+        # The main execution function for watchdog
         while not self.readyToExit:
             time.sleep(self.interval.seconds)
             
@@ -207,7 +205,7 @@ class watchdog(threading.Thread):
             if self.threads == {}: #then all threads have been removed and it's time to shut down
                 self.clear()
             else:
-                processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
+                processes = utils.checkProcesses( self.threads, self.server.waitMutex )
                 
                 try:
                     for threadId in self.threads.keys():
@@ -234,9 +232,9 @@ class watchdog(threading.Thread):
                                     self.threads[threadId]["extensions granted"] = 0
                                     self.threads[threadId]["timestamp"] = datetime.datetime.now()
                                     
-                                    officeOpenedUtils.kill(self.threads[threadId]["processes"], self.server.waitMutex)
+                                    utils.kill(self.threads[threadId]["processes"], self.server.waitMutex)
                                     #restarting a thread takes so long that it makes sense to refresh information about the threads
-                                    processes = officeOpenedUtils.checkProcesses( self.threads, self.server.waitMutex )
+                                    processes = utils.checkProcesses( self.threads, self.server.waitMutex )
                 #in case removeThread() was called while watchdog was running
                 except KeyError:
                     pass
@@ -396,7 +394,7 @@ class requestHandler(threading.Thread):
         self.socketBufferSize = server.socketBufferSize
         self.server = server
         self.log = self.server.log
-        self.home = "/home/clint/officeOpened/homeDirectories/"
+        self.home = "/home/dustymugs/Work/OOo/doos-dustymugs/home/"
         client.setblocking(1)
         client.settimeout(60.0)
         #try to find the remote machine's IP address
@@ -449,7 +447,7 @@ class requestHandler(threading.Thread):
             argString, data = data.split('::file start::', 1)
             
             #convert argString into a key-value dictionary
-            args = officeOpenedUtils.makeDictionary(argString)
+            args = utils.makeDictionary(argString)
             
             if args.has_key('terminate') and args['terminate']: #guard against "terminate=false"
                 try:

@@ -4,7 +4,7 @@ import threading
 import hashlib
 import os
 import signal
-from server import officeOpenedUtils
+from server import utils
 from officeController import runScript
 from datetime import datetime
 
@@ -53,7 +53,7 @@ class singleProcess (threading.Thread):
                 args = file.read()
                 file.close()
                 #parse the arguments
-                args = officeOpenedUtils.makeDictionary(args)
+                args = utils.makeDictionary(args)
                 #now write the time that the file was taken out of the queue
                 file = open(home + 'files/output/' + str(ticketNumber) + '/status.txt', 'a')
                 file.write('timeDequeued:' + datetime.now().isoformat() + "\n")
@@ -122,7 +122,7 @@ class singleProcess (threading.Thread):
         #get the PIDs of the processes associated with this thread
         pids = self.getPIDs()
         #and kill them all
-        officeOpenedUtils.kill([pids], self.server.waitMutex)
+        utils.kill([pids], self.server.waitMutex)
         
         self.server.watchdog.removeThread(self.threadId) #inform watchdog that this thread is shutting down
         self.ooScriptRunner.clear()

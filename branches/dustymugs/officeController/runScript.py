@@ -15,7 +15,7 @@ from com.sun.star.beans import PropertyValue
 import os
 import shutil
 import zipfile
-from server import officeOpenedUtils
+from server import utils
 import threading
 
 class scriptRunner:
@@ -87,7 +87,7 @@ class scriptRunner:
             if deadbaby in familyTree:
                 self.executionMutex.acquire()
                 self.log("Thread " + self.instanceId + "'s OpenOffice instance has died. Restarting it.", 'error\t')
-                officeOpenedUtils.kill( familyTree, self.waitMutex )   
+                utils.kill( familyTree, self.waitMutex )   
                 self.startOO()
                 self.executionMutex.release()
                 
@@ -169,7 +169,7 @@ class scriptRunner:
                     ticketNumber + ".  " + str(self.maxDispatchAttempts - i) + " attempt(s) remaining before job is abandoned.\n", 'error\t')
                 #only the PIDs which this iteration of the loop started with can be returned by getPIDs, because 
                 #execute() has the executionMutex, which is necessary for deathNotify() to restart OO.
-                officeOpenedUtils.kill( self.getPIDs(), self.waitMutex )
+                utils.kill( self.getPIDs(), self.waitMutex )
                 self.startOO()
                 i += 1
                 #if OO died because watchdog killed it, watchdog is probably in runScript.deathNotify(), which is waiting for  
