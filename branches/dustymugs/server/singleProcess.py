@@ -8,7 +8,7 @@ from Queue import Queue
 from datetime import datetime
 
 # custom modules
-from server import utils
+import utils
 from controller import runScript
 
 #should only receive a job from the dispatcher when self.job is empty

@@ -244,6 +244,8 @@ class scriptRunner:
 		self.waitMutex = None
 		self.singleProcess = None
 
+'''
 if __name__ == '__main__':
 	juno = scriptRunner(2)
 	juno.execute('this was a triumph', 321)
+'''
