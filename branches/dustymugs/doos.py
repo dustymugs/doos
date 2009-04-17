@@ -48,18 +48,18 @@ class Server:
 			self.host = '' #socket.getsockname()
 
 		if CFG.has_section('net') and CFG.has_option('net', 'port'):
-			self.port = CFG.get('net', 'port')
+			self.port = int(CFG.get('net', 'port'))
 		else:
 			self.port = 8568
 
 		#the maximum number of waiting socket connections
 		if CFG.has_section('net') and CFG.has_option('net', 'backlog'):
-			self.backlog = CFG.get('net', 'backlog')
+			self.backlog = int(CFG.get('net', 'backlog'))
 		else:
 			self.backlog = 100
 
 		if CFG.has_section('net') and CFG.has_option('net', 'socketBufferSize'):
-			self.socketBufferSize = CFG.get('net', 'socketBufferSize')
+			self.socketBufferSize = int(CFG.get('net', 'socketBufferSize'))
 		else:
 			self.socketBufferSize = 4096
 
@@ -72,9 +72,14 @@ class Server:
 		self.logfile = open(self.home + 'logs/server.log', 'a')
 
 		if CFG.has_section('server') and CFG.has_option('server', 'numSingleProcesses'):
-			self.numSingleProcesses = CFG.get('server', 'numSingleProcesses')
+			self.numSingleProcesses = int(CFG.get('server', 'numSingleProcesses'))
 		else:
 			self.numSingleProcesses = 1
+
+		if CFG.has_section('net') and CFG.has_option('net', 'serverSocketTimeout'):
+			self.serverSocketTimeout = int(CFG.get('net', 'serverSocketTimeout'))
+		else:
+			self.serverSocketTimeout = 30
 			
 		self.logMutex = threading.Lock()
 		self.server = None
@@ -87,12 +92,11 @@ class Server:
 		self.input = []
 		self.watchdog = watchdog(self)
 		self.waitMutex = threading.Lock()
-		self.serverSocketTimeout = 30
 
 		self.log("Starting " + str(self.numSingleProcesses) + " singleProcess instances.")
 
 		#Create numsingleProcesses singleProcess's, indexed by an id.
-		for i in range(int(self.numSingleProcesses)):
+		for i in range(self.numSingleProcesses):
 			i = str(i)
 			self.log("Starting thread 'singleProcess" + i + "'.")
 			self.watchdog.addThread(i)
@@ -111,6 +115,7 @@ class Server:
 		self.logMutex.release()
 
 	def terminate(self):
+		self.log('Setting server running flag to false.')
 		self.running = False
 
 	def run(self):
@@ -131,6 +136,7 @@ class Server:
 					break
 			except Exception, (message):
 				self.log("Could not open server listening socket: " + str(message), "abort")
+				self.server = None
 				break
 
 		if self.server is not None:
@@ -146,8 +152,8 @@ class Server:
 					if not running:
 						break
 
-					elif s == self.server:
-						# handle the server socket (for when someone is trying to connect)
+					# handle the server socket (for when someone is trying to connect)
+					elif s is self.server:
 						try:
 							client, address = self.server.accept()
 							self.input.append(client)
@@ -674,14 +680,12 @@ if __name__ == "__main__":
 	from server import utils
 
 	try:
+		s = Server(CFG)
 		try:
-			s = Server(CFG)
 			s.run()
 			#only the main thread can catch signals.
 		# Ctrl+C inputted
 		except KeyboardInterrupt:
 			s.terminate()
-			time.sleep(5)
-			pass
 	finally:
 		pass

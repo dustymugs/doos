@@ -28,6 +28,7 @@ class scriptRunner:
 		CFG = singleProcess.server.CFG
 
 		self.instanceId = instanceId
+		self.basePath = homeDir
 		self.home = homeDir + "home" + str(instanceId) + '/'
 		self.shuttingDown = False
 		self.waitMutex = waitMutex
@@ -133,11 +134,15 @@ class scriptRunner:
 		dirpath += '.data' #add .data to the end of the ticket number to get the macro's filename
 		file = open(dirpath, 'r+') #open the passed macro
 
-		#now rewrite instances of <<OUTDIR>> in the macro with the output location we want
-		pathCorrected = file.read().replace('<<OUTDIR>>', self.home + 'output/' + ticketNumber)
+		# replace placeholder <<OUTDIR>> with worker's output location for ticket
+		pathCorrected = file.read().replace('<<OUTDIR>>', self.home + 'output/' + ticketNumber + '/')
 
-		#and do the same with <<INDIR>>
-		pathCorrected = pathCorrected.replace('<<INDIR>>', '/home/clint/OOo')
+		# replace placeholder <<INDIR>> with global file input location for ticket
+		pathCorrected = pathCorrected.replace('<<INDIR>>', self.basePath + 'files/input/' + ticketNumber + '/')
+
+		# replace placeholder <<TEMPLATEDIR>> with global template path
+		pathCorrected = pathCorrected.replace('<<TEMPLATEDIR>>', self.basePath + 'templates/')
+
 		file.truncate(0) #to make sure we overwrite the file
 		file.write(pathCorrected)
 		file.close()
@@ -210,15 +215,21 @@ class scriptRunner:
 
 							zip.write("/".join([root,filename]), relativeRoot + filename)
 
-					#if the zip was successful, move it to homeDirectories/output/ticketNumber/files.zip
-					shutil.move(self.home + 'output/' + ticketNumber + '.zip', self.home + '../files/output/' + ticketNumber + '/files.zip')
+					#if the zip was successful, move it to the server-wide output directory, [self.basePath]/files/output/[ticketNumber]/files.zip
+					shutil.move(self.home + 'output/' + ticketNumber + '.zip', self.basePath + 'files/output/' + ticketNumber + '/files.zip')
 
 				except Exception, (message):
 					self.log("Thread " + self.instanceId + " encountered an error while writing the zip file for ticket " + \
 						ticketNumber + ":\n" + str(message) + "\nMoving output folder instead.\n", 'error\t')
 
-					#move the output files into the server-wide output folder, homeDirectories/output/ticketNumber/files
-					shutil.move(self.home + 'output/' + ticketNumber, self.home + '../files/output/' + ticketNumber + '/files')
+					#move the output directory to the server-wide output directory, [self.basePath]/files/output/[ticketNumber]/files
+					shutil.move(self.home + 'output/' + ticketNumber, self.basePath + 'files/output/' + ticketNumber + '/files')
+				# remove ticketNumber directory from worker's output directory
+				finally:
+					try:
+						shutil.rmtree(self.home + 'output/' + ticketNumber)
+					except Exception:
+						self.log("Unable to remove directory: " + self.home + 'output/' + ticketNumber)
 
 			executionSuccess = True
 

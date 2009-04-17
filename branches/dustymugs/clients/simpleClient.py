@@ -9,7 +9,7 @@ import socket
 import sys
 import hashlib
 
-host = '192.168.137.104'
+host = '192.168.137.94'
 port = 8568
 size = 4096
 sys.stdout.write('%')
@@ -19,15 +19,15 @@ while 1:
     # read from keyboard
     line = sys.stdin.readline()
     if line[:5] == 'file ':
-        file = open('/home/clint/OOo/' + line[5:-1] + '.script')
+        file = open('/home/dustymugs/Work/OOo/' + line[5:-1] + '.script')
         line = args + '::file start::' + file.read()
         file.close()
     elif line == 'busy\n':
-        file = open('/home/clint/OOo/busy.script')
+        file = open('/home/dustymugs/Work/OOo/testwait.script')
         line = args + '::file start::' + file.read()
         file.close()
     elif line == 'sample\n':
-        file = open('/home/clint/OOo/sample.script')
+        file = open('/home/dustymugs/Work/OOo/test2.script')
         line = args + '::file start::' + file.read()
         file.close()
     elif line == '\n':
