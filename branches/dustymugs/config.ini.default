@@ -48,8 +48,8 @@ numSingleProcesses=1
 
 ; Network
 [net]
-; Hostname of the server. If the host is left as '', the hostname will be determined by socket.getsockname()
-host=''
+; Hostname of the server. If the host is empty, the hostname will be determined by socket.getsockname()
+host=
 
 port=8568
 
@@ -61,7 +61,6 @@ socketBufferSize=4096
 
 ; If there is a socket error on server startup, keep trying to open the socket for this many seconds.  This is different from uploadTimeout.
 serverSocketTimeout=30
-
 
 ; Watchdog configuration
 [watchdog]

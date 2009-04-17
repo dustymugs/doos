@@ -1,7 +1,0 @@
-# runScript.ini.default
-# 
-# DO NOT MODIFY THIS FILE.
-# If you want to make changes, copy this file and rename the copy to "runScript.ini", and modify that file from there.
-# Be sure that config.ini knows to look for this file
-#
-# THIS FILE IS NOT CURRENTLY USED.
