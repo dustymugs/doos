@@ -88,6 +88,9 @@ maxTicketNumber=15999999
 [runscript]
 maxDispatchAttempts=2
 
+# path to executable soffice
+sofficepath=/opt/openoffice.org2.4/program/
+
 ; doosbags to load
 ;[doosbags]
 ; TODO: The server will look for these in the doosbags folder where the server is installed.

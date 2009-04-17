@@ -29,6 +29,7 @@ class singleProcess (threading.Thread):
 		self.home = server.home
 
 		self.ooScriptRunner = runScript.scriptRunner(self.threadId, self.home, self.server.waitMutex, self)
+
 		self.myKidsMutex = threading.Lock() #prevents conflicts between getPIDs() and deathNotify()
 		self.shuttingDown = False
 

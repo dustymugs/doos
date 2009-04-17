@@ -38,21 +38,27 @@ try:
 		#else:
 		#    line = args + '::file start::' + line[:-1] #strip out that last \n
 
-		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		s.connect((host,port))
+		try:
+			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			s.connect((host,port))
 
-		#get the sha1 hash for checksumming
-		m = hashlib.sha1()
-		m.update(line)
-		checksum = str( m.hexdigest() )
-		line = checksum + '|' + line
+			#get the sha1 hash for checksumming
+			m = hashlib.sha1()
+			m.update(line)
+			checksum = str( m.hexdigest() )
+			line = checksum + '|' + line
 
-		s.sendall( str(len(line)) + '|' + line)
-		sys.stdout.write("sending:\n" + str(len(line)) + '|' + line + "\n")
-		data = s.recv(size)
-		sys.stdout.write(data + "\n(was received)\n\n")
-		sys.stdout.write('%')
-		s.close()
+			sys.stdout.write("SEND:\n" + str(len(line)) + '|' + line + "\n")
+			s.sendall( str(len(line)) + '|' + line)
+
+			data = s.recv(size)
+			sys.stdout.write("RECEIVE:\n" + data + "\n")
+
+			s.close()
+		except Exception:
+			pass
+		finally:
+			sys.stdout.write('%')
 
 # Ctrl+C input
 except KeyboardInterrupt:

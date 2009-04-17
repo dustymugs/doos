@@ -5,40 +5,70 @@ A process management server that uses threads to handle multiple jobs and client
 Entering any line of input at the terminal will exit the server.
 
 When a client sends a job, he is assigned a ticket number which uniquely identifies the job in the system.
-The input sent by the client is stored in homeDirectories/input/**ticket number**
-When the job processing is finished, the job is stored in homeDirectories/output/**ticket number**
+The input sent by the client is stored in [workspace]/files/input/**ticket number**
+When the job processing is finished, the job is stored in [workspace]/files/output/**ticket number**
 
-The protocol for any client request is this:
+The protocol for any client REQUEST is this:
 
-number of bytes following the pipe|checksum of everything following the pipe|arguments::file start::fileContents
-( "::file start::" is a token )
-The arguments string coming from the client should be formatted as follows:
-	key1=value1;key2=value2;key3;key4;key5=value5  (etc)
+	number of bytes following the pipe|checksum of everything following the pipe|arguments::file start::fileContents
+	( "::file start::" is a token )
+	The arguments string coming from the client should be formatted as follows:
+		key1=value1;key2=value2;key3;key4;key5=value5  (etc)
+
+	Valid KEYS are:
+		terminate
+			- instruct the server to shutdown
+			- value is OPTIONAL
+		prepareJob
+			- add new job to server
+			- return should be job ticket
+			- the key "initFunc" is a dependent argument
+				- ex: prepareJob;initFunc=Main
+			- value is OPTIONAL
+		initFunc
+			- value is the name of function to be launched
+			- depends upon the key preparejob
+			- value is REQUIRED
+		returnJob
+			- get the output of job using provided ticket
+			- response will be the job output
+			- the key "ticket" is required
+				- ex: returnJob;ticket=123456
+			- value is OPTIONAL
+		statusJob
+			- get the status of job using provided ticket
+			- response will be job's status file
+			- the key "ticket" is required
+				- ex: statusJob;ticket=123456
+			- value is OPTIONAL
+		deleteJob
+			- delete the output files of a job using provided ticket
+			- TODO: have command remove job from queue if job not processed yet
+			- the key "ticket" is required
+				- ex: deleteJob;ticket=123456
+			- value is OPTIONAL
+		ticket
+			- value is REQUIRED
 
 When a client requests a ticket, the system searches the output folder for the ticket as a filename and returns the file if found.
 	If that file is not found, but it is found in input/, then the server responds that the job is still being processed
 	if that file is not found in either folder, the server replies that the ticket id is unknown
+
 """
+
 '''
 TODO:
 	Fix exception handling with socket events
 	If you restart a server, you'll get "Could not start up, socket in use."  Figure out how to make it work, or just quit.
 	On server startup, check files/input for any files, and run those first.  Those are files which were processing when the server died.
 		Clients may be looking for them.
-	Remove output after it's been retrieved, or add a deletion function that clients can call after retrieval
 '''
+
 import sys
 import ConfigParser
-from Queue import Queue
 
 # custom modules
 import config
-
-class jobStatus:
-	'''
-	This is an enumeration for the status of jobs
-	'''
-	notFound, error, enqueued, dequeued, done = range(5)
 
 if __name__ == "__main__":
 	# config
@@ -60,6 +90,10 @@ if __name__ == "__main__":
 		s = Server(CFG)
 		s.run()
 		#only the main thread can catch signals.
+	# Ctrl+C input
+	except KeyboardInterrupt:
+		s.log("Server instructed to shutdown by keyboard.")
+		s.terminate()
 	finally:
 		try:
 			s.server.close()

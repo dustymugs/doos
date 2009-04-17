@@ -42,6 +42,12 @@ class scriptRunner:
 		self.singleProcess = singleProcess
 		self.log = singleProcess.server.log
 
+		if CFG.has_section('runscript') and CFG.has_option('runscript', 'sofficepath'):
+			self.sofficepath = CFG.get('runscript', 'sofficepath')
+		else:
+			self.log('Missing sofficepath setting for thread ' + self.instanceId + '.  Stopping initialization.')
+			self.sofficepath = ''
+
 		self.startOO()
 
 	def startOO(self):
@@ -51,7 +57,7 @@ class scriptRunner:
 
 		#create a new OpenOffice process and have it listen on a pipe
 		self.childOffice = \
-			subprocess.Popen( ('/opt/openoffice.org2.4/program/soffice', "-accept=pipe,name=doosPipe" + str(self.instanceId) + ";urp;", "-headless", "-nofirststartwizard"), \
+			subprocess.Popen( (self.sofficepath + 'soffice', "-accept=pipe,name=doosPipe" + str(self.instanceId) + ";urp;", "-headless", "-nofirststartwizard"), \
 				env={ "PATH": os.environ["PATH"], \
 				"HOME": self.home } ) #we need to have several 'homes' to have
 															#several OO instances running

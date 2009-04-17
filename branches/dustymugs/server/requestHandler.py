@@ -1,4 +1,4 @@
-import os
+import os, shutil
 import socket
 import threading
 import random
@@ -6,6 +6,7 @@ import hashlib
 import datetime
 
 import utils
+from jobStatus import jobStatus
 
 class requestHandler(threading.Thread):
 	def __init__(self, client, server):
@@ -87,7 +88,8 @@ class requestHandler(threading.Thread):
 			#convert argString into a key-value dictionary
 			args = utils.makeDictionary(argString)
 
-			if args.has_key('terminate') and args['terminate']: #guard against "terminate=false"
+			#guard against "terminate=false"
+			if args.has_key('terminate') and args['terminate']:
 				try:
 					self.client.sendall( "shutting down...\n" )
 				finally:
@@ -99,8 +101,8 @@ class requestHandler(threading.Thread):
 				self.prepareJob(argString, data)
 
 			#if they want status or they want the job
-			elif ( (args.has_key('stat') and args['stat']) or (args.has_key('returnJob') and args['returnJob']) ) and args.has_key('ticket'):
-				logfile, status = self.stat(args['ticket']) #get the file containing the job's status
+			elif ( (args.has_key('statusJob') and args['statusJob']) or (args.has_key('returnJob') and args['returnJob']) ) and args.has_key('ticket'):
+				logfile, status = self.statusJob(args['ticket']) #get the file containing the job's status
 
 				if status == jobStatus.notFound:
 					self.client.sendall( "STATUS " + str(status) + ": " + str(logfile) )
@@ -111,16 +113,45 @@ class requestHandler(threading.Thread):
 				else:
 					self.client.sendall(logfile)
 					self.log("Sent status for ticket '" + args['ticket'] + "' to '" + self.remoteHostName + "'.")
+
+			# command to delete output files of job from files/output
+			# TODO: have command remove job from queue if job not processed yet
+			elif (args.has_key('deleteJob') and args['deleteJob']) and args.has_key('ticket'):
+				#this function handles its own logging.
+				self.deleteJob(args['ticket'])
 			else:
-				self.client.sendall("STATUS " + jobStatus.error + ": Unknown command\n")
+				self.client.sendall("STATUS " + str(jobStatus.error) + ": Unknown command\n")
 
 		except socket.error, (message):
-			self.log("Socket error for host '" + self.remoteHostName + "': " + str(message), "error\t" )
+			self.log("Socket error for host '" + self.remoteHostName + "': " + str(message), "error\t")
 		except Exception, (message):
-			self.log("Unknown error for host '" + self.remoteHostName + "': " + str(message), 'error\t')
+			self.log("Unknown error for host '" + self.remoteHostName + "': " + str(message), "error\t")
 		finally:
 			#now close the connection
 			self.client.close()
+
+	# delete the output directory of the job ticket
+	# TODO: have command remove job from queue if job not processed yet
+	def deleteJob(self, ticket):
+		deleteFlag = True
+
+		# delete output directory of job ticket
+		if os.path.exists(self.home + 'files/output/' + ticket):
+			try:
+				shutil.rmtree(self.home + 'files/output/' + ticket)
+				self.log('Directory deleted for ticket ' + ticket + ' in path: ' + self.home + 'files/output/' + ticket)
+			except Exception:
+				self.log('Failure to delete directory for ticket ' + ticket + ' in path: ' + self.home + 'files/output/' + ticket, "error\t")
+				deleteFlag = False
+		else:
+			self.log('Directory not found for ticket ' + ticket + ' in path: ' + self.home + 'files/output/' + ticket)
+
+		# delete was completely successful
+		if deleteFlag:
+			self.client.sendall('[OK] Success deleting contents for job: ' + ticket)
+		# delete failed somewhere
+		else:
+			self.client.sendall('[ERROR] Error while attempt to delete contents for job: ' + ticket)
 
 	def returnJob(self, ticket):
 		'''
@@ -173,7 +204,7 @@ class requestHandler(threading.Thread):
 		else:
 			self.log("Successfully sent output for ticket '" + ticket + "' to '" + self.remoteHostName + "'.")
 
-	def stat(self, ticket):
+	def statusJob(self, ticket):
 		try:
 			file = open(self.home + "files/output/" + ticket + "/status.txt")
 			logfile = file.read()
@@ -228,5 +259,5 @@ class requestHandler(threading.Thread):
 
 		#finally, put the data into the queue
 		self.server.jobQueue.put( dirpath, True )
-		self.client.sendall( "transmission ok\nticket number:" + filename + "\n")
+		self.client.sendall( "Transmission OK\nTicket #:" + filename + "\n")
 		self.log("Job '" + filename + "' entered into queue.  Received from '" + self.remoteHostName + "'.")

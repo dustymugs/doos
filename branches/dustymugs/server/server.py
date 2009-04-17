@@ -55,6 +55,8 @@ class Server:
 			self.serverSocketTimeout = 30
 			
 		self.logMutex = threading.Lock()
+		self.log("Starting server")
+
 		self.server = None
 		self.jobQueue = Queue()
 
@@ -88,7 +90,7 @@ class Server:
 		self.logMutex.release()
 
 	def terminate(self):
-		self.log('Setting Server.running flag to false.')
+		self.log('Setting flag "Server.running" to false.')
 		self.running = False
 
 	def run(self):
@@ -151,6 +153,7 @@ class Server:
 			self.jobQueue.put( 'terminate', True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
 		self.jobQueue.join()
 		#the watchdog will shut itself down when all threads have removed themselves from its list.
+		self.log('Server stopped')
 
 	def __del__(self):
 		self.logfile.close()
