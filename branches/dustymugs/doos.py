@@ -115,7 +115,7 @@ class Server:
 		self.logMutex.release()
 
 	def terminate(self):
-		self.log('Setting server running flag to false.')
+		self.log('Setting Server.running flag to false.')
 		self.running = False
 
 	def run(self):
@@ -146,7 +146,7 @@ class Server:
 			running = 1
 			while self.running:
 				#choose among the input sources which are ready to give data.  Choosing between stdin, the server socket, and established client connections
-				inputready,outputready,exceptready = select.select(self.input,[],[])
+				inputready,outputready,exceptready = select.select(self.input,[],[], 30)
 
 				for s in inputready:
 					if not running:
@@ -168,6 +168,7 @@ class Server:
 						self.input.remove ( s ) #tell the server thread to stop looking for input on this socket
 						grabber.start()
 
+			self.log('Closing Server.server socket...')
 			self.server.close()
 
 		#exiting gracefully; allow all threads to finish before closing
@@ -681,11 +682,7 @@ if __name__ == "__main__":
 
 	try:
 		s = Server(CFG)
-		try:
-			s.run()
-			#only the main thread can catch signals.
-		# Ctrl+C inputted
-		except KeyboardInterrupt:
-			s.terminate()
+		s.run()
+		#only the main thread can catch signals.
 	finally:
 		pass
