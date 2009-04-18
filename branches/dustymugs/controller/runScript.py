@@ -6,6 +6,7 @@ TODO:
 	When a thread is launched, be sure to nuke the output folder in case any residual files are chilling there.
 
 	MAJOR SECURITY FLAW:  MUST PREVENT STARBASIC SHELL COMMAND FROM RUNNING!  It's available to OO macros
+		I think this has been resolved but only time will tell
 '''
 
 import subprocess
@@ -15,6 +16,7 @@ import os
 import shutil
 import zipfile
 import threading
+import re
 
 # OpenOffice.org modules
 import uno
@@ -152,6 +154,23 @@ class scriptRunner:
 		file.truncate(0) #to make sure we overwrite the file
 		file.write(pathCorrected)
 		file.close()
+
+		# reopen file for security filter
+		file = open(dirpath, 'r+') #open the passed macro
+		lines = []
+
+		# security filter for StarBasic function Shell()
+		bad = re.compile('.*(?<!\w)Shell\s*\(')
+		badFlag = False
+		for l in file:
+			if bad.match(l):
+				l = "'" + l
+				badFlag = True
+			lines.append(l)
+		if badFlag:
+			file.truncate(0)
+			file.writelines(lines)
+			file.close()
 
 		executionSuccess = False
 		#make two attempts at execution
