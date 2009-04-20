@@ -38,7 +38,7 @@
 workspace=/doos/workspace/
 
 # if more than one path, use colon to separate
-pythonpath=/opt/openoffice.org2.4/program
+pythonpath=
 
 ; Server configuration
 [server]
