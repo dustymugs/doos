@@ -11,16 +11,16 @@
 PATH=/usr/local/doos:/usr/local/bin:/usr/bin:/bin
 
 start() {
-  /bin/su nobody -c "/usr/local/doos/doos.py &"
+  /bin/su nobody -c "/usr/local/doos/doos.py > /dev/null 2>&1 &"
 }
 
 stop() {
   /usr/local/doos/clients/simpleClient.py terminate > /dev/null 2>&1
+  sleep 20
 }
 
 restart() {
   stop
-  sleep 20
   start
 }
 

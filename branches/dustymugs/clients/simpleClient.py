@@ -9,7 +9,8 @@ import socket
 import sys
 import hashlib
 
-host = '192.168.137.94'
+#host = '127.0.0.1'
+host = '172.16.2.21'
 port = 8568
 size = 4096
 
@@ -37,6 +38,10 @@ try:
 			file = open('/home/dustymugs/Work/OOo/' + line[5:])
 			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
 			file.close()
+		elif line[:5] == 'host ':
+			print "Changing %s to %s" % (host, line[5:])
+			host = line[5:]
+			continue
 		elif line == "busy":
 			file = open('/home/dustymugs/Work/OOo/testwait.script')
 			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
