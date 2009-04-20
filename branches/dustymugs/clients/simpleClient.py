@@ -12,31 +12,43 @@ import hashlib
 host = '192.168.137.94'
 port = 8568
 size = 4096
-sys.stdout.write('%')
 
 try:
+	isArgv = False
+	args = 'prepareJob;initFunc=Main'
+
 	while 1:
-		args = 'prepareJob;initFunc=Main'
-		# read from keyboard
-		line = sys.stdin.readline()
+
+		if (len(sys.argv) > 1) and not isArgv:
+			isArgv = True
+
+			i = 1
+			line = []
+			while i < len(sys.argv):
+				line.append(sys.argv[i])
+				i += 1
+			line = ' '.join(line)
+		else:
+			sys.stdout.write('%')
+			# read from keyboard
+			line = sys.stdin.readline().rstrip()
+
 		if line[:5] == 'file ':
-			file = open('/home/dustymugs/Work/OOo/' + line[5:-1])
+			file = open('/home/dustymugs/Work/OOo/' + line[5:])
 			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
 			file.close()
-		elif line == "busy\n":
+		elif line == "busy":
 			file = open('/home/dustymugs/Work/OOo/testwait.script')
 			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
 			file.close()
-		elif line == "sample\n":
+		elif line == "sample":
 			file = open('/home/dustymugs/Work/OOo/test2.script')
 			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
 			file.close()
-		elif line == "exit\n" or line == "\n":
+		elif line == "exit" or line == "":
 			break
 		else: #for sending raw commands
-			line = line[:-1] + '::file start::'
-		#else:
-		#    line = args + '::file start::' + line[:-1] #strip out that last \n
+			line = line + '::file start::'
 
 		try:
 			s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -58,7 +70,10 @@ try:
 		except Exception:
 			pass
 		finally:
-			sys.stdout.write('%')
+			pass
+
+		if isArgv:
+			break
 
 # Ctrl+C input
 except KeyboardInterrupt:
