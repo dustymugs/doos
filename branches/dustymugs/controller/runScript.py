@@ -132,15 +132,16 @@ class scriptRunner:
 		Grab the script located at dirpath, then connect to OpenOffice and run it.
 		When done, move the folder we created to the program folder/files/output
 		'''
-		(junk, ticketNumber) = dirpath.rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
+		(junk, ticketNumber) = (dirpath.rstrip('/')).rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
 		ticketNumber = str(ticketNumber)
 
 		if not args.has_key('initFunc'):
 			self.log( "Thread " + self.instanceId + " says: initFunc was not defined by client for ticket " + ticketNumber, 'error\t' )
 			return false
 
-		dirpath += '.data' #add .data to the end of the ticket number to get the macro's filename
-		file = open(dirpath, 'r+') #open the passed macro
+		#dirpath += '.data' #add .data to the end of the ticket number to get the macro's filename
+		filename = dirpath + 'main.script'
+		file = open(filename, 'r+') #open the passed macro
 
 		# replace placeholder <<OUTDIR>> with worker's output location for ticket
 		pathCorrected = file.read().replace('<<OUTDIR>>', self.home + 'output/' + ticketNumber + '/')
@@ -156,7 +157,7 @@ class scriptRunner:
 		file.close()
 
 		# reopen file for security filter
-		file = open(dirpath, 'r+') #open the passed macro
+		file = open(filename, 'r+') #open the passed macro
 		lines = []
 
 		# security filter for StarBasic function Shell()
@@ -194,7 +195,7 @@ class scriptRunner:
 				properties.append(p)
 				properties = tuple(properties)
 
-				self.dispatchHelper.executeDispatch(self.desktop, 'macro:///AutoOOo.OOoCore.runScript(' + dirpath + ',' \
+				self.dispatchHelper.executeDispatch(self.desktop, 'macro:///AutoOOo.OOoCore.runScript(' + filename + ',' \
 					+ args["initFunc"] + ')', "", 0, properties)
 
 				# As quoted from the PyUno tutorial:

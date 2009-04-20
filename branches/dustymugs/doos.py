@@ -8,11 +8,15 @@ When a client sends a job, he is assigned a ticket number which uniquely identif
 The input sent by the client is stored in [workspace]/files/input/**ticket number**
 When the job processing is finished, the job is stored in [workspace]/files/output/**ticket number**
 
-The protocol for any client REQUEST is this:
+The protocol for all client REQUEST is:
 
-	number of bytes following the pipe|checksum of everything following the pipe|arguments::file start::fileContents
-	( "::file start::" is a token )
-	The arguments string coming from the client should be formatted as follows:
+	{NUMBER OF BYTES FOLLOWING THE PIPE}|{SHA1 CHECKSUM OF EVERYTHING FOLLOWING THE PIPE}|{ARGUMENTS}::file start::[{FILE0 NAME}::file content::{FILE0 CONTENT}::file end::[::file start::{FILEX NAME}::file content::{FILEX CONTENT}::file end::]]
+
+	'::file start::', '::file content::' and '::file end::' are tokens
+
+	FILE0 is always the script to run while FILEX is for other files needed by the script
+
+	The ARGUMENTS string coming from the client should be formatted as follows:
 		key1=value1;key2=value2;key3;key4;key5=value5  (etc)
 
 	Valid KEYS are:
@@ -53,6 +57,9 @@ The protocol for any client REQUEST is this:
 When a client requests a ticket, the system searches the output folder for the ticket as a filename and returns the file if found.
 	If that file is not found, but it is found in input/, then the server responds that the job is still being processed
 	if that file is not found in either folder, the server replies that the ticket id is unknown
+
+The protocol for any server RESPONSE is:
+	{NUMBER OF BYTES FOLLOWING THE PIPE}|{SHA1 CHECKSUM OF EVERYTHING FOLLOWING THE PIPE}|[{SERVER RESPONSE}][::file start::{FILE0 NAME}::file content::{FILE0 CONTENT}::file end::[::file start::{FILEX NAME}::file content::{FILEX CONTENT}::file end::]]
 
 """
 

@@ -59,8 +59,12 @@ backlog=100
 ; the number of bytes for the network buffer to use.  This should be a fairly small number.
 socketBufferSize=4096
 
-; If there is a socket error on server startup, keep trying to open the socket for this many seconds.  This is different from uploadTimeout.
-serverSocketTimeout=30
+; If there is a socket error on server startup, keep trying to open the socket for this many attempts.
+; An attempt will take place every 2 seconds
+serverSocketRetry=15
+
+; Timeout for select.select()
+serverSelectTimeout=30
 
 ; Watchdog configuration
 [watchdog]

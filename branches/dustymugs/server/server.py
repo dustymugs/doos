@@ -49,10 +49,15 @@ class Server:
 		else:
 			self.numSingleProcesses = 1
 
-		if CFG.has_section('net') and CFG.has_option('net', 'serverSocketTimeout'):
-			self.serverSocketTimeout = int(CFG.get('net', 'serverSocketTimeout'))
+		if CFG.has_section('net') and CFG.has_option('net', 'serverSocketRetry'):
+			self.serverSocketRetry = int(CFG.get('net', 'serverSocketRetry'))
 		else:
-			self.serverSocketTimeout = 30
+			self.serverSocketRetry = 15
+			
+		if CFG.has_section('net') and CFG.has_option('net', 'serverSelectTimeout'):
+			self.serverSelectTimeout = int(CFG.get('net', 'serverSelectTimeout'))
+		else:
+			self.serverSelectTimeout = 30
 			
 		self.logMutex = threading.Lock()
 		self.log("Starting server")
@@ -101,10 +106,10 @@ class Server:
 				self.server.listen(self.backlog)
 				break
 			except socket.error, (value, message):
-				if self.serverSocketTimeout > 0:
+				if self.serverSocketRetry > 0:
 					self.log("Socket error. Retrying in 2 seconds...", "error\t")
 					time.sleep(2)
-					self.serverSocketTimeout -= 2
+					self.serverSocketRetry -= 2
 				else:
 					self.log("Could not open server listening socket: Connection attempts timed out.", "abort")
 					self.server = None
@@ -116,12 +121,14 @@ class Server:
 
 		if self.server is not None:
 			self.log("Server listening on port " + str(self.port))
+			self.log('Server ready to accept clients')
+
 			#start the singleProcess threads
 			self.input = [self.server]
 			running = 1
 			while self.running:
 				#choose among the input sources which are ready to give data.  Choosing between stdin, the server socket, and established client connections
-				inputready,outputready,exceptready = select.select(self.input,[],[], 30)
+				inputready,outputready,exceptready = select.select(self.input,[],[], self.serverSelectTimeout)
 
 				for s in inputready:
 					if not running:

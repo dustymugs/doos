@@ -8,6 +8,12 @@ import datetime
 import utils
 from jobStatus import jobStatus
 
+def formatResponse(response):
+	m = hashlib.sha1()
+	m.update(response)
+	fr = str(m.hexdigest()) + '|' + response
+	return (str(len(fr)) + '|' + fr)
+
 class requestHandler(threading.Thread):
 	def __init__(self, client, server):
 		threading.Thread.__init__(self, name="requestHandler")
@@ -79,7 +85,7 @@ class requestHandler(threading.Thread):
 			m.update(data)
 			if (m.hexdigest() != checksum):
 				try:
-					self.client.sendall( "Checksum failed!" )
+					self.client.sendall(formatResponse("Checksum failed!"))
 				finally:
 					raise Exception("Checksum failed! ")
 
@@ -91,7 +97,7 @@ class requestHandler(threading.Thread):
 			#guard against "terminate=false"
 			if args.has_key('terminate') and args['terminate']:
 				try:
-					self.client.sendall( "shutting down...\n" )
+					self.client.sendall(formatResponse("shutting down..."))
 				finally:
 					self.log("Received shutdown command from '" + self.remoteHostName + "'.")
 					self.server.terminate() #tell the server to shut down all threads
@@ -105,13 +111,13 @@ class requestHandler(threading.Thread):
 				logfile, status = self.statusJob(args['ticket']) #get the file containing the job's status
 
 				if status == jobStatus.notFound:
-					self.client.sendall( "STATUS " + str(status) + ": " + str(logfile) )
+					self.client.sendall(formatResponse("STATUS " + str(status) + ": " + str(logfile)))
 					self.log("Sent 'ticket not found' for ticket '" + args['ticket'] + "' to '" + self.remoteHostName + "'.", 'error\t')
 				elif (args.has_key('returnJob') and args['returnJob']) and status == jobStatus.done:
 					#this function handles its own logging.
 					self.returnJob( args['ticket'] )
 				else:
-					self.client.sendall(logfile)
+					self.client.sendall(formatResponse(logfile))
 					self.log("Sent status for ticket '" + args['ticket'] + "' to '" + self.remoteHostName + "'.")
 
 			# command to delete output files of job from files/output
@@ -120,7 +126,7 @@ class requestHandler(threading.Thread):
 				#this function handles its own logging.
 				self.deleteJob(args['ticket'])
 			else:
-				self.client.sendall("STATUS " + str(jobStatus.error) + ": Unknown command\n")
+				self.client.sendall(formatResponse("STATUS " + str(jobStatus.error) + ": Unknown command"))
 
 		except socket.error, (message):
 			self.log("Socket error for host '" + self.remoteHostName + "': " + str(message), "error\t")
@@ -148,10 +154,10 @@ class requestHandler(threading.Thread):
 
 		# delete was completely successful
 		if deleteFlag:
-			self.client.sendall('[OK] Success deleting contents for job: ' + ticket)
+			self.client.sendall(formatResponse('[OK] Success deleting contents for job: ' + ticket))
 		# delete failed somewhere
 		else:
-			self.client.sendall('[ERROR] Error while attempt to delete contents for job: ' + ticket)
+			self.client.sendall(formatResponse('[ERROR] Error while attempt to delete contents for job: ' + ticket))
 
 	def returnJob(self, ticket):
 		'''
@@ -186,7 +192,7 @@ class requestHandler(threading.Thread):
 			#if we couldn't read all of the files
 			except Exception, (message):
 				try:
-					self.client.sendall('STATUS ' + str(jobStatus.error) + ": " + str(message))
+					self.client.sendall(formatResponse('STATUS ' + str(jobStatus.error) + ": " + str(message)))
 				except Exception, (message):
 					self.log("Unknown error reading output for ticket " + ticket + ": " + str(message), "error\t" )
 		except Exception, (message):
@@ -195,8 +201,10 @@ class requestHandler(threading.Thread):
 		#So now we have the data (or failure).  Let's send the data back to the client.
 		try:
 			if isZip is not None:
+				response = []
 				for file in data:
-					self.client.sendall( file[0] + "::file start::" + file[1] + "::fileEnd")
+					response.append('::file start::' + file[0] + '::file content::' + file[1] + '::file end::')
+				self.client.sendall(formatResponse(''.join(response)))
 		except socket.error, (message):
 			self.log("Socket error sending output for ticket '" + ticket + "' to '" + self.remoteHostName + "': " + str(message), "error\t" )
 		except Exception, (message):
@@ -211,7 +219,7 @@ class requestHandler(threading.Thread):
 			file.close()
 		except IOError, (value, message): #if the file is not found, the ticket doesn't exist.
 			if value == 2:
-				return "Ticket not found.\n", jobStatus.notFound
+				return "Ticket not found.", jobStatus.notFound
 			else:
 				return str(message), jobStatus.error
 		except Exception, (message):
@@ -227,31 +235,49 @@ class requestHandler(threading.Thread):
 			return logfile, jobStatus.enqueued
 
 	def prepareJob(self, argString, data):
-		#if the file already exists, keep generating a random filename until an available one is found
-		#keep checking the output folder too because this filename will be the unique ticket number, and
-		#if there's a file there, that ticket is in the system (and waiting for some client to come claim it)
+		# if the ticket already exists, keep generating a random ticket until an available one is found
+		# keep checking the output folder too because this filename will be the unique ticket number, and
+		# if there's a file there, that ticket is in the system (and waiting for some client to come claim it)
 		randgen = random.Random()
 		randgen.seed()
-		filename = str( randgen.randint(self.minTicketNumber, self.maxTicketNumber) )
+		ticket = str( randgen.randint(self.minTicketNumber, self.maxTicketNumber) )
 
-		while os.path.exists(self.home + 'files/input/' + filename + '.data') \
-				or os.path.exists(self.home + 'files/output/' + filename):
-			filename = str( randgen.randint(self.minTicketNumber, self.maxTicketNumber) )
+		while os.path.exists(self.home + 'files/input/' + ticket) \
+				or os.path.exists(self.home + 'files/output/' + ticket):
+			ticket = str( randgen.randint(self.minTicketNumber, self.maxTicketNumber) )
 
-		#path to the input file
-		dirpath = self.home + 'files/input/' + filename
-		file = open(dirpath + '.data', 'w')
-		file.write( data ) #save the data
-		file.close()
+		#path to the input dir
+		dirpath = self.home + 'files/input/' + ticket + '/'
+		os.mkdir(dirpath);
+
+		# write the files to disk
+		i = 0
+		for x in data.split('::file start::'):
+			x = x.rstrip('::file end::')
+			filename, filecontent = x.split('::file content::', 1)
+
+			# file 0 is always considered the main script file
+			if i == 0: filename = 'main.script'
+
+			if len(filename) < 1:
+				self.client.sendall(formatResponse('[ERROR] File #' + i + ' of Job ' + ticket + ' does not have a name.  Skipping...'))
+				self.log('File #' + i + ' of Job ' + ticket + ' does not have a name.  Skipping...')
+				continue
+
+			file = open(dirpath + filename, 'w')
+			file.write(filecontent) #save the data
+			file.close()
+
+			i += 1
 
 		#now write arguments to the handler for this command to a file
-		file = open(dirpath + '.args', 'w')
+		file = open(dirpath + ticket + '.args', 'w')
 		file.write(argString)
 		file.close()
 
 		#now create a directory for the job status file status.txt to be stored
-		os.mkdir(self.home + 'files/output/' + filename)
-		file = open(self.home + 'files/output/' + filename + '/status.txt', 'w')
+		os.mkdir(self.home + 'files/output/' + ticket)
+		file = open(self.home + 'files/output/' + ticket + '/status.txt', 'w')
 
 		#log the date and time
 		file.write('timeEntered:' + datetime.datetime.now().isoformat() + "\n")
@@ -259,5 +285,5 @@ class requestHandler(threading.Thread):
 
 		#finally, put the data into the queue
 		self.server.jobQueue.put( dirpath, True )
-		self.client.sendall( "Transmission OK\nTicket #:" + filename + "\n")
-		self.log("Job '" + filename + "' entered into queue.  Received from '" + self.remoteHostName + "'.")
+		self.client.sendall(formatResponse("[OK] Ticket #:" + ticket))
+		self.log("Job '" + ticket + "' entered into queue.  Received from '" + self.remoteHostName + "'.")

@@ -20,18 +20,18 @@ try:
 		# read from keyboard
 		line = sys.stdin.readline()
 		if line[:5] == 'file ':
-			file = open('/home/dustymugs/Work/OOo/' + line[5:-1] + '.script')
-			line = args + '::file start::' + file.read()
+			file = open('/home/dustymugs/Work/OOo/' + line[5:-1])
+			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
 			file.close()
-		elif line == 'busy\n':
+		elif line == "busy\n":
 			file = open('/home/dustymugs/Work/OOo/testwait.script')
-			line = args + '::file start::' + file.read()
+			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
 			file.close()
-		elif line == 'sample\n':
+		elif line == "sample\n":
 			file = open('/home/dustymugs/Work/OOo/test2.script')
-			line = args + '::file start::' + file.read()
+			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
 			file.close()
-		elif line == "\n":
+		elif line == "exit\n" or line == "\n":
 			break
 		else: #for sending raw commands
 			line = line[:-1] + '::file start::'

@@ -1,7 +1,7 @@
 import sys
 import threading
 import hashlib
-import os
+import os, shutil
 import signal
 
 from Queue import Queue
@@ -48,49 +48,48 @@ class singleProcess (threading.Thread):
 				self.server.jobQueue.task_done()
 				self.clear()
 				break
+
+			# parse out the ticket number
+			(junk, ticketNumber) = (dirpath.rstrip('/')).rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
+
+			#each element in jobDistribution is a tuple of ( ticketNumber, time recorded, extensionsGranted)
+			self.server.watchdog.updateThread(self.threadId, ticket=ticketNumber, extensionsGranted=0)
+
+			#jobs are passed as dirpath, the path to the ticket's input files e.g. "/doos/workspace/files/input/23424"
+			#read the arguments from the .args file for this ticket
+			file = open(dirpath + ticketNumber + '.args', 'r')
+			args = file.read()
+			file.close()
+
+			#parse the arguments
+			args = utils.makeDictionary(args)
+
+			#now write the time that the file was taken out of the queue
+			file = open(self.home + 'files/output/' + str(ticketNumber) + '/status.txt', 'a')
+			file.write('timeDequeued:' + datetime.now().isoformat() + "\n")
+			file.close()
+
+			#execution stage
+			success = self.ooScriptRunner.execute(dirpath, args)
+
+			#write the job's status to status.txt now that it's done
+			file = open(self.home + 'files/output/' + str(ticketNumber) + '/status.txt', 'a')
+
+			if success:
+				file.write('timeCompleted:')
+				self.log('Thread ' + self.threadId + ' successfully processed job ' + ticketNumber)
 			else:
-				# parse out the ticket number
-				(junk, ticketNumber) = dirpath.rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
+				file.write('timeFailed:')
+				self.log('Thread ' + self.threadId + ' has abandoned job ' + ticketNumber, 'error\t')
 
-				#each element in jobDistribution is a tuple of ( ticketNumber, time recorded, extensionsGranted)
-				self.server.watchdog.updateThread(self.threadId, ticket=ticketNumber, extensionsGranted=0)
+			file.write( datetime.now().isoformat() + "\n" )
+			file.close()
 
-				#jobs are passed as dirpath, the path to the ticket's input files e.g. "/doos/workspace/files/input/23424"
-				#read the arguments from the .args file for this ticket
-				file = open(dirpath + '.args', 'r')
-				args = file.read()
-				file.close()
+			#remove the input directory now that we're done with them
+			shutil.rmtree(dirpath)
 
-				#parse the arguments
-				args = utils.makeDictionary(args)
-
-				#now write the time that the file was taken out of the queue
-				file = open(self.home + 'files/output/' + str(ticketNumber) + '/status.txt', 'a')
-				file.write('timeDequeued:' + datetime.now().isoformat() + "\n")
-				file.close()
-
-				#execution stage
-				success = self.ooScriptRunner.execute(dirpath, args)
-
-				#write the job's status to status.txt now that it's done
-				file = open(self.home + 'files/output/' + str(ticketNumber) + '/status.txt', 'a')
-
-				if success:
-					file.write('timeCompleted:')
-					self.log('Thread ' + self.threadId + ' successfully processed job ' + ticketNumber)
-				else:
-					file.write('timeFailed:')
-					self.log('Thread ' + self.threadId + ' has abandoned job ' + ticketNumber, 'error\t')
-
-				file.write( datetime.now().isoformat() + "\n" )
-				file.close()
-
-				#remove the input files now that we're done with them
-				os.remove(dirpath + '.data') 
-				os.remove(dirpath + '.args')
-
-				self.server.jobQueue.task_done() #helps the queue keep track of how many jobs are still running
-				self.server.watchdog.updateThread(self.threadId, ticket='ready', extensionsGranted=0)
+			self.server.jobQueue.task_done() #helps the queue keep track of how many jobs are still running
+			self.server.watchdog.updateThread(self.threadId, ticket='ready', extensionsGranted=0)
 
 	def deathNotify(self, deadKids):
 		'''
