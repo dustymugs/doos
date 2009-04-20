@@ -1,13 +1,5 @@
 #!/usr/bin/env python
 
-'''
-TODO:
-	Fix exception handling with socket events
-	If you restart a server, you'll get "Could not start up, socket in use."  Figure out how to make it work, or just quit.
-	On server startup, check files/input for any files, and run those first.  Those are files which were processing when the server died.
-		Clients may be looking for them.
-'''
-
 import sys
 import ConfigParser
 
