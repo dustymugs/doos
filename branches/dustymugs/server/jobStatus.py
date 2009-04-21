@@ -6,15 +6,15 @@ class jobStatus:
 	notFound, error, enqueued, dequeued, done = range(5)
 
 	def asText(id):
-		if id = 0:
+		if id == 0:
 			rtn = 'Not found'
-		elif id = 1:
+		elif id == 1:
 			rtn = 'Error'
-		elif id = 2:
+		elif id == 2:
 			rtn = 'Enqueued'
-		elif id = 3:
+		elif id == 3:
 			rtn = 'Dequeued'
-		elif id = 4:
+		elif id == 4:
 			rtn = 'Done'
 		else:
 			rtn = false
