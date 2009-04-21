@@ -85,7 +85,7 @@ class requestHandler(threading.Thread):
 			m.update(data)
 			if (m.hexdigest() != checksum):
 				try:
-					self.client.sendall(formatResponse("Checksum failed!"))
+					self.client.sendall(formatResponse("[ERROR] Checksum failed."))
 				finally:
 					raise Exception("Checksum failed! ")
 
@@ -97,7 +97,7 @@ class requestHandler(threading.Thread):
 			#guard against "terminate=false"
 			if args.has_key('terminate') and args['terminate']:
 				try:
-					self.client.sendall(formatResponse("shutting down..."))
+					self.client.sendall(formatResponse("[OK]"))
 				finally:
 					self.log("Received shutdown command from '" + self.remoteHostName + "'.")
 					self.server.terminate() #tell the server to shut down all threads
@@ -111,13 +111,13 @@ class requestHandler(threading.Thread):
 				logfile, status = self.statusJob(args['ticket']) #get the file containing the job's status
 
 				if status == jobStatus.notFound:
-					self.client.sendall(formatResponse("STATUS " + str(status) + ": " + str(logfile)))
+					self.client.sendall(formatResponse("[ERROR] Unknown Ticket: " + args['ticket'] + '.'))
 					self.log("Sent 'ticket not found' for ticket '" + args['ticket'] + "' to '" + self.remoteHostName + "'.", 'error\t')
 				elif (args.has_key('returnJob') and args['returnJob']) and status == jobStatus.done:
 					#this function handles its own logging.
 					self.returnJob( args['ticket'] )
 				else:
-					self.client.sendall(formatResponse(logfile))
+					self.client.sendall(formatResponse("[OK] " + jobStatus.asText(status)))
 					self.log("Sent status for ticket '" + args['ticket'] + "' to '" + self.remoteHostName + "'.")
 
 			# command to delete output files of job from files/output
@@ -126,7 +126,7 @@ class requestHandler(threading.Thread):
 				#this function handles its own logging.
 				self.deleteJob(args['ticket'])
 			else:
-				self.client.sendall(formatResponse("STATUS " + str(jobStatus.error) + ": Unknown command"))
+				self.client.sendall(formatResponse("[ERROR] Unknown command."))
 
 		except socket.error, (message):
 			self.log("Socket error for host '" + self.remoteHostName + "': " + str(message), "error\t")
@@ -154,10 +154,10 @@ class requestHandler(threading.Thread):
 
 		# delete was completely successful
 		if deleteFlag:
-			self.client.sendall(formatResponse('[OK] Success deleting contents for job: ' + ticket))
+			self.client.sendall(formatResponse('[OK]'))
 		# delete failed somewhere
 		else:
-			self.client.sendall(formatResponse('[ERROR] Error while attempt to delete contents for job: ' + ticket))
+			self.client.sendall(formatResponse('[ERROR] Error while attempt to delete contents for Ticket: ' + ticket + '.'))
 
 	def returnJob(self, ticket):
 		'''
@@ -192,7 +192,7 @@ class requestHandler(threading.Thread):
 			#if we couldn't read all of the files
 			except Exception, (message):
 				try:
-					self.client.sendall(formatResponse('STATUS ' + str(jobStatus.error) + ": " + str(message)))
+					self.client.sendall(formatResponse('[ERROR] Unable to read all the output files of Ticket: ' + ticket + '.'))
 				except Exception, (message):
 					self.log("Unknown error reading output for ticket " + ticket + ": " + str(message), "error\t" )
 		except Exception, (message):
@@ -204,7 +204,7 @@ class requestHandler(threading.Thread):
 				response = []
 				for file in data:
 					response.append('::file start::' + file[0] + '::file content::' + file[1] + '::file end::')
-				self.client.sendall(formatResponse(''.join(response)))
+				self.client.sendall(formatResponse('[OK] ' + ''.join(response)))
 		except socket.error, (message):
 			self.log("Socket error sending output for ticket '" + ticket + "' to '" + self.remoteHostName + "': " + str(message), "error\t" )
 		except Exception, (message):
@@ -260,7 +260,7 @@ class requestHandler(threading.Thread):
 			if i == 0: filename = 'main.script'
 
 			if len(filename) < 1:
-				self.client.sendall(formatResponse('[ERROR] File #' + i + ' of Job ' + ticket + ' does not have a name.  Skipping...'))
+				self.client.sendall(formatResponse('[ERROR] Skipping unnamed file #' + i + ' of Ticket:' + ticket + '.'))
 				self.log('File #' + i + ' of Job ' + ticket + ' does not have a name.  Skipping...')
 				continue
 
@@ -285,5 +285,5 @@ class requestHandler(threading.Thread):
 
 		#finally, put the data into the queue
 		self.server.jobQueue.put( dirpath, True )
-		self.client.sendall(formatResponse("[OK] Ticket #:" + ticket))
+		self.client.sendall(formatResponse("[OK] Ticket:" + ticket))
 		self.log("Job '" + ticket + "' entered into queue.  Received from '" + self.remoteHostName + "'.")

@@ -1,5 +1,6 @@
 A process management server that uses threads to handle multiple jobs and clients at a time.
-Entering any line of input at the terminal will exit the server.
+
+By default, the server listens on TCP 8568.
 
 When a client sends a job, he is assigned a ticket number which uniquely identifies the job in the system.
 The input sent by the client is stored in [workspace]/files/input/**ticket number**
@@ -57,3 +58,7 @@ When a client requests a ticket, the system searches the output folder for the t
 
 The protocol for any server RESPONSE is:
 	{NUMBER OF BYTES FOLLOWING THE PIPE}|{SHA1 CHECKSUM OF EVERYTHING FOLLOWING THE PIPE}|[{SERVER RESPONSE}][::file start::{FILE0 NAME}::file content::{FILE0 CONTENT}::file end::[::file start::{FILEX NAME}::file content::{FILEX CONTENT}::file end::]]
+
+The SERVER RESPONSE follows the following format:
+	[OK] MESSAGE
+	[ERROR] MESSAGE
