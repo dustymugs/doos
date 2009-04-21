@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
-import sys
+import os,sys
 import ConfigParser
+
+# change working directory
+os.chdir(os.path.dirname(sys.argv[0]))
 
 # custom modules
 import config
