@@ -115,9 +115,9 @@ class requestHandler(threading.Thread):
 					self.log("Sent 'ticket not found' for ticket '" + args['ticket'] + "' to '" + self.remoteHostName + "'.", 'error\t')
 				elif (args.has_key('returnJob') and args['returnJob']) and status == jobStatus.done:
 					#this function handles its own logging.
-					self.returnJob( args['ticket'] )
+					self.returnJob(args['ticket'])
 				else:
-					self.client.sendall(formatResponse("[OK] " + jobStatus.asText(status)))
+					self.client.sendall(formatResponse("[OK] " + str(jobStatus.asText(status))))
 					self.log("Sent status for ticket '" + args['ticket'] + "' to '" + self.remoteHostName + "'.")
 
 			# command to delete output files of job from files/output
