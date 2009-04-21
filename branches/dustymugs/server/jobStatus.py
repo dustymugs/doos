@@ -5,7 +5,7 @@ class jobStatus:
 	'''
 	notFound, error, enqueued, dequeued, done = range(5)
 
-	def asText(self, id):
+	def asText(id):
 		if id == 0:
 			rtn = 'Not found'
 		elif id == 1:
@@ -19,3 +19,5 @@ class jobStatus:
 		else:
 			rtn = false
 		return rtn
+
+	asText = staticmethod(asText)
