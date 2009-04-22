@@ -1,0 +1,40 @@
+#!/bin/sh
+#
+# /etc/rc.d/rc.doos
+#
+# Start/stop/restart the doos server.
+#
+# To make doos start automatically at boot, make this
+# file executable:  chmod 755 /etc/rc.d/rc.doos
+#
+
+PATH=/usr/local/doos:/usr/local/bin:/usr/bin:/bin
+
+start() {
+  /bin/su nobody -c "/usr/local/doos/doos.py > /dev/null 2>&1 &"
+}
+
+stop() {
+  /usr/local/doos/clients/simpleClient.py terminate > /dev/null 2>&1
+  sleep 20
+}
+
+restart() {
+  stop
+  start
+}
+
+case "$1" in
+  'start')
+    start
+  ;;
+  'stop')
+    stop
+  ;;
+  'restart')
+    restart
+  ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+  ;;
+esac
