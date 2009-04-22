@@ -16,3 +16,27 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, a copy is available at
 http://www.gnu.org/licenses/gpl-3.0-standalone.html
 '''
+
+# used by requestHandler
+class jobStatus:
+	'''
+	This is an enumeration for the status of jobs
+	'''
+	notFound, error, enqueued, dequeued, done = range(5)
+
+	def asText(id):
+		if id == 0:
+			rtn = 'Not found'
+		elif id == 1:
+			rtn = 'Error'
+		elif id == 2:
+			rtn = 'Enqueued'
+		elif id == 3:
+			rtn = 'Dequeued'
+		elif id == 4:
+			rtn = 'Done'
+		else:
+			rtn = false
+		return rtn
+
+	asText = staticmethod(asText)
