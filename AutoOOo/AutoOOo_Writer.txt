@@ -1,0 +1,106 @@
+'
+' doos: A multi-threaded server for running client-provided macros in OpenOffice.org
+' Copyright (C) 2008 - 2009  therudegesture and dustymugs
+'
+' This program is free software; you can redistribute it and/or modify
+' it under the terms of the GNU General Public License as published by
+' the Free Software Foundation; either version 3 of the License, or
+' (at your option) any later version.
+'
+' This program is distributed in the hope that it will be useful,
+' but WITHOUT ANY WARRANTY; without even the implied warranty of
+' MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+' GNU General Public License for more details.
+'
+' You should have received a copy of the GNU General Public License
+' along with this program; if not, a copy is available at
+' http://www.gnu.org/licenses/gpl-3.0-standalone.html
+'
+
+' set value of texttable cell at visible cursor
+Sub setValueInTextTableCell(oDoc as Object, value As String, Optional replace As Boolean)
+	Dim oVC as Object
+
+	oVC = oDoc.CurrentController.getViewCursor()
+	If IsNull(oVC.TextTable) OR IsEmpty(oVC.TextTable) Then
+		Exit Sub
+	End If
+
+	If IsMissing(replace) Then replace = FALSE
+
+	oCurCell = oVC.Cell
+	oText = oCurCell.getText()
+	oTC = oText.createTextCursorByRange(oText.getText())
+	oText.insertString(oTC, value, replace)
+End Sub
+
+' shift cursor within texttable by a direction and an increment value
+' this moves the cursor to a new cell
+Sub shiftCursorWithinTextTable(oDoc, direction As String, Optional Increment)
+	Dim oVC as Object
+
+	oVC = oDoc.CurrentController.getViewCursor()
+	If IsNull(oVC.TextTable) OR IsEmpty(oVC.TextTable) Then
+		Exit Sub
+	End If
+
+	If IsMissing(Increment) OR NOT IsNumeric(Increment) Then Increment = 1
+
+	Select Case LCase(direction)
+		Case "right"
+			oVC.goRight(Increment, FALSE)
+		Case "left"
+			oVC.goLeft(Increment, FALSE)
+		Case "up"
+			oVC.goUp(Increment, FALSE)
+		Case "down"
+			oVC.goDown(Increment, FALSE)
+	End Select
+End Sub
+
+' move cursor within texttable by cell to jump to
+Sub jumpCursorWithinTextTable(oDoc as Object, column As Integer, row As Integer)
+	Dim oVC As Object
+	Dim oTable As Object
+
+	oVC = oDoc.getCurrentController().getViewCursor()
+	If IsNull(oVC.TextTable) OR IsEmpty(oVC.TextTable) Then
+		Exit Sub
+	End If
+
+	oTable = oVC.TextTable
+	oVC.gotoRange(oTable.getCellByPosition(column, row), FALSE)
+End Sub
+
+' put cursor into texttable
+' default is to set at first row, first cell
+Sub moveCursorIntoTextTable(oDoc as Object, tableName As String, Optional column, Optional row)
+	Dim oTable As Object
+
+	oTable = oDoc.getTextTables().getByName(tableName)
+	oDoc.getCurrentController().select(oTable)
+
+	If IsMissing(column) OR NOT IsNumeric(column) Then column = 0
+	If IsMissing(row) OR NOT IsNumeric(row) Then row = 0
+
+	jumpCursorWithinTextTable(column, row)
+End Sub
+
+' set a value at position indicated by bookmark
+' this does not move the visible cursor
+Sub setValueByBookMark(oDoc as Object, bmName As String, value As String)
+	Dim oBkMk As Object
+
+	oBkMk = oDoc.getBookmarks().getByName(bmName)
+	oBkMk.getAnchor().setString(value)
+End Sub
+
+' move visible cursor to bookmark
+Sub moveCursorToBookMark(oDoc as Object, bmName As String)
+	Dim oVC As Object
+	Dim oBkMk As Object
+
+	oVC = oDoc.getCurrentController().getViewCursor()
+	oBkMk = oDoc.getBookmarks().getByName(bmName).getAnchor()
+	oVC.gotoRange(oBkMk, FALSE)
+End Sub

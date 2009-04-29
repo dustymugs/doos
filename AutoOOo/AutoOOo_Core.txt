@@ -1,0 +1,283 @@
+'
+' doos: A multi-threaded server for running client-provided macros in OpenOffice.org
+' Copyright (C) 2008 - 2009  therudegesture and dustymugs
+'
+' This program is free software; you can redistribute it and/or modify
+' it under the terms of the GNU General Public License as published by
+' the Free Software Foundation; either version 3 of the License, or
+' (at your option) any later version.
+'
+' This program is distributed in the hope that it will be useful,
+' but WITHOUT ANY WARRANTY; without even the implied warranty of
+' MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+' GNU General Public License for more details.
+'
+' You should have received a copy of the GNU General Public License
+' along with this program; if not, a copy is available at
+' http://www.gnu.org/licenses/gpl-3.0-standalone.html
+'
+
+' create and return a new com.sun.star.beans.PropertyValue
+Function setPropertyValue(Optional cName As String, Optional uValue) As com.sun.star.beans.PropertyValue
+	Dim oPropertyValue As New com.sun.star.beans.PropertyValue
+	If Not IsMissing(cName) Then oPropertyValue.Name = cName
+	If Not IsMissing(uValue) Then oPropertyValue.Value = uValue
+	setPropertyValue = oPropertyValue
+End Function
+
+' create new document from a template file
+' the templateName should contain the full physical path and filename
+' the templateName will be converted to URL format
+Function newDocFromTemplate(templateName As String, Optional hideDoc As Boolean)
+	Dim oDoc As Object
+
+	If IsMissing(hideDoc) Then hideDoc = FALSE
+	oDoc = StarDesktop.loadComponentFromUrl(convertToURL(templateName), "_blank", 0, Array(setPropertyValue("AsTemplate", TRUE), setPropertyValue("Hidden", hideDoc)))
+	newDocFromTemplate = oDoc
+End Function
+
+' create new document
+' the typeDocument is either text or data
+Function newDocument(typeDocument As String, Optional hideDoc As Boolean)
+	Dim oDoc As Object, aURL As String
+
+	If IsMissing(hideDoc) Then hideDoc = FALSE
+
+	Select Case typeDocument
+		Case "text"
+			aURL = "private:factory/swriter"
+		Case "data"
+			aURL = "private:factory/scalc"
+	End Select
+	If Len(aURL) < 1 Then
+		newDocument = FALSE
+		Exit Function
+	End If
+
+	oDoc = StarDesktop.loadComponentFromUrl(aURL, "_blank", 0, Array(setPropertyValue("Hidden", hideDoc)))
+	newDocument = oDoc
+End Function
+
+' save document
+' the docName should contain the full physical path and filename
+' the docName will be converted to URL format
+Function saveDocToPath(oDoc As Object, docName As String, Optional fileFilter, Optional overWrite As Boolean)
+	Dim a(1) As New com.sun.star.beans.PropertyValue
+	Dim cPos As Long, cPosLast As Long
+
+	If IsMissing(overWrite) Then overWrite = FALSE
+	' fileFilter not set
+	' try to retrieve the file extension
+	If IsMissing(fileFilter) Or Len(CStr(fileFilter)) < 1 Then
+		cPosLast = 1
+		cPos = InStr(cPosLast, docName, ".")
+		While cPos <> 0
+			cPosLast = cPos
+			cPos = InStr(cPosLast + 1, docName, ".")
+		Wend
+		fileFilter = Right(docName, Len(docName) - cPosLast)
+	End If
+
+	' process fileFilter for extensions
+	' fileFilter can either be a file extension or the actual file filter name
+	Select Case fileFilter
+		Case "xls"
+			fileFilter = "MS Excel 97"
+		Case "doc"
+			fileFilter = "MS Word 97"
+		Case "odt"
+			fileFilter = "writer8"
+		Case "ods"
+			fileFilter = "calc8"
+		Case "odf"
+			' Calc
+			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
+				fileFilter = "calc8"
+			' Writer
+			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
+				fileFilter = "writer8"
+			End If
+		Case "html"
+			' Calc
+			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
+				fileFilter = "HTML (StarCalc)"
+			' Writer
+			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
+				fileFilter = "HTML (StarWriter)"
+			End If
+		Case "txt","text","csv"
+			' Calc
+			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
+				fileFilter = "Text - txt - csv (StarCalc)"
+			' Writer
+			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
+				fileFilter = "Text"
+			End If
+		Case "pdf"
+			' Calc
+			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
+				fileFilter = "calc_pdf_Export"
+			' Writer
+			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
+				fileFilter = "writer_pdf_Export"
+			End If
+	End Select
+
+	If Len(fileFilter) < 1 Then
+		saveDocToPath = FALSE
+		Exit Function
+	End If
+
+	' save settings
+	a(0).Name = "Overwrite"
+	a(0).Value = overWrite
+	a(1).Name = "FilterName"
+	a(1).Value = fileFilter
+
+	' for export filters, use ToURL instead of AsURL otherwise exception thrown
+	If InStr(fileFilter, "_Export") <> 0 Then
+		oDoc.storeToURL(convertToURL(docName), a())
+	Else
+		oDoc.storeAsURL(convertToURL(docName), a())
+	End If
+End Function
+
+' close document with override to force closure
+Function closeDocument(oDoc As Object, Optional forceClose As Boolean)
+	If IsMissing(forceClose) Then forceClose = FALSE
+
+	' flagged so set document as not modified
+	If forceClose Then
+		oDoc.setModified(FALSE)
+	End If
+
+	' this should not run if flag set above
+	If oDoc.isModified Then
+		If (oDoc.hasLocation AND (NOT oDoc.isReadOnly)) Then
+			oDoc.store()
+		Else
+			oDoc.setModified(FALSE)
+		End If
+	End If
+
+	oDoc.close(True)
+End Function
+
+' reads in a file line by line to a string
+' string is returned from function
+Function readFileToString(fileName As String)
+	Dim fNum As Integer
+	Dim fileContent As String, fileLine As String
+
+	fNum = FreeFile
+	fileContent = ""
+
+	OPEN fileName FOR INPUT As #fNum
+	Do While NOT EOF(#fNum)
+		LINE INPUT #fNum, fileLine
+		If (fileLine <> "") Then fileContent = fileContent & CHR$(10) & fileLine
+	Loop
+	CLOSE #fNum
+
+	readFileToString = fileContent
+End Function
+
+Function strReplace(Source As String, Search As String, NewPart As String)
+	Dim Result As String
+	Dim StartPos As Long
+	Dim CurrentPos As Long
+
+	Result = ""
+	StartPos = 1
+	CurrentPos = 1
+
+	If Search = "" Then
+		Result = Source
+	Else
+		Do While CurrentPos <> 0
+			CurrentPos = InStr(StartPos, Source, Search)
+			If CurrentPos <> 0 Then
+				Result = Result & Mid(Source, StartPos, CurrentPos - StartPos)
+				Result = Result & NewPart
+				StartPos = CurrentPos + Len(Search)
+			Else
+				Result = Result & Mid(Source, StartPos, Len(Source))
+			End If ' Position <> 0
+		Loop
+	End If
+
+	strReplace = Result
+End Function
+
+' this procedure does 3 things
+' 1. adds content of script file in fileScript into a new module
+' 2. execute the procedure/function referenced by strLaunch in new module
+' 3. remove new module
+Sub runScript(fileScript As String, Optional strLaunch As String)
+	Dim oLib ' the library used to run the new function
+	Dim oLibs
+	Dim oDisp
+	Dim macroURL As String
+	Dim nameLibrary As String, nameModule As String
+	Dim contentModule As String
+	Dim cPos As Long, cPosLast As Long
+
+	' file needs to exist
+	If NOT FileExists(fileScript) Then Exit Sub
+
+	nameLibrary = "Temp"
+
+	' get the name of the file from fileScript
+	' the name is used as the module name
+	cPosLast = 1
+	cPos = InStr(cPosLast, fileScript, "/")
+	While cPos <> 0
+		cPosLast = cPos
+		cPos = InStr(cPosLast + 1, fileScript, "/")
+	Wend
+	nameModule = strReplace(Right(fileScript, Len(fileScript) - cPosLast), ".", "_")
+
+	If IsMissing(strLaunch) Then strLaunch = "Main"
+	oDisp = createUnoService("com.sun.star.frame.DispatchHelper")
+	macroURL = "macro:///" & nameLibrary & "." & nameModule & "." & strLaunch
+
+	' retrieve available libraries
+	oLibs = GlobalScope.BasicLibraries
+	' library doesn't exist
+	If NOT oLibs.hasByName(nameLibrary) Then
+		' create library
+		oLibs.createLibrary(nameLibrary)
+	End If
+
+	' load library
+	oLibs.loadLibrary(nameLibrary)
+	oLib = oLibs.getByName(nameLibrary)
+
+	' see if module exists
+	If oLib.hasByName(nameModule) Then
+		' module exists, delete module
+		oLib.removeByName(nameModule)
+	End If
+
+	contentModule = readFileToString(fileScript)
+
+	' add module
+	oLib.insertByName(nameModule, contentModule)
+
+	' execute module
+	oDisp.executeDispatch(StarDesktop, macroURL, "", 0, Array())
+
+	' delete module
+	oLib.removeByName(nameModule)
+End Sub
+
+' converts color represented in long integer to RGB
+Function convertLongToRGB(lngColor As Long)
+	Dim RGB(3) As Integer
+	
+	RGB(0) = Red(lngColor) 'CInt(lngColor MOD 256) ' red
+	RGB(1) = Green(lngColor) 'CInt((lngColor / 256) MOD 256) ' green
+	RGB(2) = Blue(lngColor) 'CInt((lngColor / 65536) MOD 256) ' blue
+
+	convertLongToRGB = RGB
+End Function

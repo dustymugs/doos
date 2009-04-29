@@ -1,0 +1,204 @@
+'
+' doos: A multi-threaded server for running client-provided macros in OpenOffice.org
+' Copyright (C) 2008 - 2009  therudegesture and dustymugs
+'
+' This program is free software; you can redistribute it and/or modify
+' it under the terms of the GNU General Public License as published by
+' the Free Software Foundation; either version 3 of the License, or
+' (at your option) any later version.
+'
+' This program is distributed in the hope that it will be useful,
+' but WITHOUT ANY WARRANTY; without even the implied warranty of
+' MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+' GNU General Public License for more details.
+'
+' You should have received a copy of the GNU General Public License
+' along with this program; if not, a copy is available at
+' http://www.gnu.org/licenses/gpl-3.0-standalone.html
+'
+
+' set the value of a cell referenced by named range
+' see about determining the value type before assignment
+Function setCellByNamedRange(oDoc as Object, rngName As String, rngValue, Optional typeValue)
+	Dim oSheet, oRange
+
+	If IsMissing(typeValue) Then typeValue = "auto"
+	typeValue = LCase(typeValue)
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oRange = oSheet.getCellRangeByName(rngName)
+
+	Select Case typeValue
+		Case "value"
+			oRange.setValue(rngValue) ' set numeric value
+		Case "string"
+			oRange.setString(rngValue) ' set string value
+		Case "formula"
+			oRange.setFormula(rngValue) ' set formula string value
+		Case Else
+			If IsNumeric(rngValue) Then
+				oRange.setValue(rngValue) ' set numeric value
+			ElseIf Left(rngValue, 1) = "=" Then
+				oRange.setFormula(rngValue) ' set formula string value
+			Else
+				oRange.setString(rngValue) ' set string value
+			End If
+	End Select
+
+End Function
+
+' get cell object using named range
+' see about handling named range not referencing a single cell
+Function getCellByNamedRange(oDoc as Object, rngName As String)
+	Dim oSheet, oRange
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oRange = oSheet.getCellRangeByName(rngName)
+
+	getCellByNamedRange = oRange
+End Function
+
+' place selection (and focus) on a cell referenced by name range
+' technically, this could be a group of cells
+Function selectCellByNamedRange(oDoc as Object, rngName As String)
+	Dim oSheet, oRange
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oRange = oSheet.getCellRangeByName(rngName)
+	oDoc.getCurrentController().select(oRange)
+
+	selectCellByNamedRange = oDoc.getCurrentSelection()
+End Function
+
+' set value of cell using column and row indexes
+' indexes are zero-based
+Function setCellByPosition(oDoc as Object, column As Integer, row As Integer, cellValue, Optional typeValue)
+	Dim oSheet, oCell
+	If IsMissing(typeValue) Then typeValue = "auto"
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oCell = oSheet.getCellByPosition(column, row)
+
+	Select Case typeValue
+		Case "value"
+			oCell.Value = cellValue ' set numeric value
+		Case "string"
+			oCell.String = cellValue ' set string value
+		Case "formula"
+			oCell.Formula = cellValue ' set formula string value
+		Case Else
+			If IsNumeric(cellValue) Then
+				oCell.Value = cellValue ' set numeric value
+			ElseIf Left(cellValue, 1) = "=" Then
+				oCell.Formula = cellValue ' set formula string value
+			Else
+				oCell.String = cellValue ' set string value
+			End If
+	End Select
+
+	setCellByPosition = oCell
+End Function
+
+' place selection (and focus) on cell referenced by column and row indexes
+' indexes are zero-based
+Function selectCellByPosition(oDoc as Object, column As Integer, row As Integer)
+	Dim oSheet, oCell
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oCell = oSheet.getCellByPosition(column, row)
+	oDoc.getCurrentController().select(oCell)
+	selectCellByPosition = oCell
+End Function
+
+' make sheet active by name
+Function setActiveSheetByName(oDoc as Object, sheetName As String)
+	Dim oSheet As Object
+
+	oSheet = oDoc.getSheets().getByName(sheetName)
+	oDoc.getCurrentController().setActiveSheet(oSheet)
+'	oDoc.getCurrentController().select(oSheet)
+	setActiveSheetByName = oSheet
+End Function
+
+' copy a sheet by sheet name
+' if index isn't provided, automatically put new sheet at the end
+' indexes are zero-based
+Function copySheetByName(oDoc as Object, srcName As String, dstName As String, Optional dstIndex)
+	If IsMissing(dstIndex) OR Not IsNumeric(dstIndex) Then dstIndex = oDoc.getSheets().getCount()
+
+	oDoc.getSheets().copyByName(srcName, dstName, dstIndex)
+	copySheetByName = oDoc.getSheets().getByName(dstName)
+End Function
+
+' create new sheet
+' indexes are zero-based
+Function addNewSheet(oDoc as Object, Optional sheetName, Optional sheetIndex)
+	Dim oSheets As Object, oSheet As Object
+	Dim i As Integer, j As Integer
+
+	oSheets = oDoc.getSheets()
+	If IsMissing(sheetIndex) Or Not IsNumeric(sheetIndex) Then sheetIndex = oDoc.getSheets().getCount()
+	If IsMissing(sheetName) Or Len(CStr(sheetName)) < 1 Then
+		' to get new name check to see if name exists
+		' only way to check is by attempting to fetch sheet by name
+		' name does not exist, error
+		On Error Goto NoSheetName
+			i = 1
+			For j = 1 To 2 Step 0
+				oSheets.getByName("Sheet" & i)				
+				i = i + 1
+			Next
+		NoSheetName:
+			sheetName = "Sheet" & i
+	End If
+
+	' add sheet by name
+	oSheets.insertNewByName(sheetName, sheetIndex)
+	' return new sheet object
+	addNewSheet = oSheets.getByName(sheetName)
+End Function
+
+' merge cells by range name
+' range name would be something like C4:E4
+Function mergeCellsByRange(oDoc as Object, rngName as String)
+	Dim oSheet, oRange
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oRange = oSheet.getCellRangeByName(rngName)
+	oRange.Merge(TRUE)
+	
+	mergeCellsByRange = oRange
+End Function
+
+' merge cells by cell positions
+' indexes are zero-based
+Function mergeCellsByPosition(oDoc as Object, column1 As Integer, row1 As Integer, column2 As Integer, row2 As Integer)
+	Dim oSheet, oRange
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oRange = oSheet.getCellRangeByPosition(column1, row1, column2, row2)
+	oRange.Merge(TRUE)
+	
+	mergeCellsByPosition = oRange
+End Function
+
+' create a new BorderLine with passed values
+' some possible width values (1/100 mm)
+'		35 = ~1pt
+'		70 = ~2pt
+'		88 = ~2.5pt
+Function newBorderLine(Optional color, Optional innerWidth, Optional outerWidth, Optional distance)
+	Dim borderStyle As New com.sun.star.table.BorderLine
+
+	If IsMissing(color) Then color = RGB(0, 0, 0) ' black
+	If IsMissing(innerWidth) Then innerWidth = 0 ' no inner line
+	If IsMissing(outerWidth) Then outerWidth = 35 ' ~1pt width of outer line
+	If IsMissing(distance) Then distance = 0 ' no distance between lines
+
+	borderStyle.Color = color
+	borderStyle.InnerLineWidth = innerWidth
+	borderStyle.OuterLineWidth = outerWidth
+	borderStyle.LineDistance = distance
+
+	newBorderLine = borderStyle
+End Function

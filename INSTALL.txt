@@ -1,0 +1,33 @@
+PREREQUISITES
+
+- Python 2.4 or newer (No Python 3000 support)
+- OpenOffice.org 2.4 (OpenOffice.org 3.x support unknown)
+	- It must be noted that doos does NOT use the python executable found in OpenOffice.org 2.4.  This will cause your python executable to output a warning message that can be safely ignored.
+- Java Runtime Environment (JRE) 1.5 or newer
+
+INSTALL
+
+1. Extract doos-x.x.tar.bz2 to an install path.  If install path is /usr/local/, the final path will be /usr/local/doos.  The rest of these steps assume the path is /usr/local/doos.
+
+	tar jxf doos-x.x.tar.bz2 /usr/local
+
+2. Extract workspace.tar.bz2 to a path.  If install path is /usr/local/doos, the final path will be /usr/local/doos/workspace.  The rest of these steps assume the workspace is located in /usr/local/doos/workspace.
+
+	tar jxf workspace.tar.bz2 /usr/local/doos
+
+3. Copy config.ini.default to config.ini in /usr/local/doos.  Edit config.ini and make any desired changes.  You will probably need to change the following:
+
+	- workspace - This is the path from step 2 above
+	- pythonpath - This is the path to the installed OpenOffice.org program path, such as /opt/openoffice.org2.4/program
+	- numSingleProcesses - The number of parallel OpenOffice.org instances to run.  This number should be no more than the number of processing cores available on the computer.  For a dedicated server with 4 cores (not processors), a value of 4 is fine.
+	- serverSelectTimeout - This value, if lower, will increase the response rate when terminating the server.  This value does NOT increase the response rate of anything else.  A value of 10 is recommended.
+	- jobTimeout - Before changing this value, estimate the time needed to run the most time-consuming job.  This will require trial and error to see what jobs get terminated prematurely.
+	- maxExtensions - If a job goes past the time set in jobTimeout, this determines the number of additional time extensions that the job will be given.  Each extension given will be half the value of jobTimeout.
+	- minCPU - Floating point value of the cpu usage percentage threshhold under which a job is considered idle.
+	- sofficepath - path including filename to the soffice file, such /opt/openoffice2.4/program/soffice
+
+4. In the workspace path, copy the directory homeX N times where N is the value of numSingleProcesses from config.ini.  Each copy of homeX must be numbered from 0 to N - 1, i.e. home0, home1, home2, ... homeN-1.
+
+5. doos.py is main file so make sure it has the executable bit set, ex: chmod a+x doos.py.  doos does not have a daemon mode but can be sent to the background depending upon the shell.  In bash, ./doos.py & should do it.  In the contrib/ path, an example startup script is provided.
+
+6. Server logs are found in the workspace path in the logs directory.
