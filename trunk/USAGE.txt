@@ -1,0 +1,114 @@
+BACKGROUND
+
+doos uses a py-uno bridge to pass OpenOffice.org Basic commands from the client to each OpenOffice.org instance.  By using OpenOffice.org Basic, clients can be written in any language.  In homeX (and any copies of it), there is a copy of the OpenOffice.org Basic library AutoOOo. AutoOOo provides "bootstrap" code to launch the primary function of the client's job script, specified by the client.  In addition, AutoOOo provides helper functions that can be used in client job scripts.
+
+WALKTHROUGH
+
+To submit a job, a OpenOffice.org Basic script is passed from the client to doos to one of the OpenOffice.org instances.  A simple OpenOffice.org Basic script looks something like the following.
+
+[code]
+Sub Main()
+End Sub
+[/code]
+
+As you can see, this script doesn't do much.  All it has is a simple subroutine called Main.  If this script were to be passed to doos, the argument string would be:
+
+prepareJob;initFunc=Main
+
+This instructs doos to create a new job and that the subroutine be called when starting the job is Main.
+
+A slightly more useful script would be:
+
+[code]
+Sub Main()
+	On Error GoTo ABORT
+	Dim oDoc As Object, oSheet As Object, oCell As Object
+	oDoc = newDocument("data", TRUE)
+
+	saveDocToPath(oDoc, "<<OUTDIR>>54321.ods",, TRUE)
+	closeDocument(oDoc)
+	GoTo TheEND
+
+	ABORT:
+		On Error GoTo TheEND
+		closeDocument(oDoc, TRUE)
+	
+	TheEND:
+		Exit Sub
+End Sub
+[/code]
+
+The script above creates a new spreadsheet document, saves the document to 54321.ods and closes the document.  The functions newDocument, saveDocToPath and closeDocument are functions provided by the AutoOOo library.  To see the various functions provided by AutoOOo, view the contents of the various files found in the AutoOOo directory of the doos installation path.
+
+The <<OUTDIR>> is a placeholder for the output directory path known only in the doos server.  The placeholders available in doos are:
+
+<<OUTDIR>> - directory path to which the document is saved
+<<INDIR>> - directory path in which the uploaded files are stored
+<<TEMPLATEDIR>> - if doos has templates available in workspace/templates, this the directory path to workspace/templates
+
+It is good practice to have catchall exception handling in your scripts as this helps the OpenOffice.org instances to quickly exit a job with exceptions, thus decreasing the response time.
+
+COMMUNICATION PROTOCOL
+
+By default, the server listens on TCP 8568.
+
+When a client sends a job, he is assigned a ticket number which uniquely identifies the job in the system.
+The input sent by the client is stored in [workspace]/files/input/**ticket number**
+When the job processing is finished, the job is stored in [workspace]/files/output/**ticket number**
+
+The protocol for all client REQUEST is:
+
+	{NUMBER OF BYTES FOLLOWING THE PIPE}|{SHA1 CHECKSUM OF EVERYTHING FOLLOWING THE PIPE}|{ARGUMENTS}::file start::[{FILE0 NAME}::file content::{FILE0 CONTENT}::file end::[::file start::{FILEX NAME}::file content::{FILEX CONTENT}::file end::]]
+
+	'::file start::', '::file content::' and '::file end::' are tokens
+
+	FILE0 is always the script to run while FILEX is for other files needed by the script
+
+	The ARGUMENTS string coming from the client should be formatted as follows:
+		key1=value1;key2=value2;key3;key4;key5=value5  (etc)
+
+	Valid KEYS are:
+		terminate
+			- instruct the server to shutdown
+			- value is OPTIONAL
+		prepareJob
+			- add new job to server
+			- return should be job ticket
+			- the key "initFunc" is a dependent argument
+				- ex: prepareJob;initFunc=Main
+			- value is OPTIONAL
+		initFunc
+			- value is the name of function to be launched
+			- depends upon the key preparejob
+			- value is REQUIRED
+		returnJob
+			- get the output of job using provided ticket
+			- response will be the job output
+			- the key "ticket" is required
+				- ex: returnJob;ticket=123456
+			- value is OPTIONAL
+		statusJob
+			- get the status of job using provided ticket
+			- response will be job's status file
+			- the key "ticket" is required
+				- ex: statusJob;ticket=123456
+			- value is OPTIONAL
+		deleteJob
+			- delete the output files of a job using provided ticket
+			- TODO: have command remove job from queue if job not processed yet
+			- the key "ticket" is required
+				- ex: deleteJob;ticket=123456
+			- value is OPTIONAL
+		ticket
+			- value is REQUIRED
+
+When a client requests a ticket, the system searches the output folder for the ticket as a filename and returns the file if found.
+	If that file is not found, but it is found in input/, then the server responds that the job is still being processed
+	if that file is not found in either folder, the server replies that the ticket id is unknown
+
+The protocol for any server RESPONSE is:
+	{NUMBER OF BYTES FOLLOWING THE PIPE}|{SHA1 CHECKSUM OF EVERYTHING FOLLOWING THE PIPE}|[{SERVER RESPONSE}][::file start::{FILE0 NAME}::file content::{FILE0 CONTENT}::file end::[::file start::{FILEX NAME}::file content::{FILEX CONTENT}::file end::]]
+
+The SERVER RESPONSE follows the following format:
+	[OK] MESSAGE
+	[ERROR] MESSAGE

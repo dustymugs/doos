@@ -265,7 +265,7 @@ class scriptRunner:
 
 				except Exception, (message):
 					self.log("Thread " + self.instanceId + " encountered an error while writing the zip file for ticket " + \
-						ticketNumber + ":\n" + str(message) + "\nMoving output folder instead.\n", 'error\t')
+						ticketNumber + ":\n" + str(message) + ".  Moving output folder instead.\n", 'error\t')
 
 					#move the output directory to the server-wide output directory, [self.basePath]/files/output/[ticketNumber]/files
 					shutil.move(self.home + 'output/' + ticketNumber, self.basePath + 'files/output/' + ticketNumber + '/files')
