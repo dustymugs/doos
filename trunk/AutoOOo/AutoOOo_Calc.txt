@@ -17,6 +17,34 @@
 ' http://www.gnu.org/licenses/gpl-3.0-standalone.html
 '
 
+' set the print area of the active sheet by named range
+Function setPrintAreaByNamedRange(oDoc as Object, rngName as String)
+	Dim oSheet As Object, oRangeAddress
+	Dim areaPrint(0) as new com.sun.star.table.CellRangeAddress
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oSheet.setPrintAreas(array())
+
+	oRangeAddress = oSheet.getCellRangeByName(rngName).rangeAddress
+	setPrintAreaByPosition(oDoc, oRangeAddress.startColumn, oRangeAddress.StartRow, oRangeAddress.EndColumn, oRangeAddress.EndRow)
+End Function
+
+' set the print area of the active sheet by position
+' indexes are zero-based
+Function setPrintAreaByPosition(oDoc as Object, column1 as Integer, row1 as Integer, column2 as Integer, row2 as Integer)
+	Dim oSheet As Object
+	Dim areaPrint(0) as new com.sun.star.table.CellRangeAddress
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oSheet.setPrintAreas(array())
+	
+	areaPrint(0).StartColumn = column1
+	areaPrint(0).StartRow = row1
+	areaPrint(0).EndColumn = column2
+	areaPrint(0).EndRow = row2
+	oSheet.setPrintAreas(areaPrint)
+End Function
+
 ' set the value of a cell referenced by named range
 ' see about determining the value type before assignment
 Function setCellByNamedRange(oDoc as Object, rngName As String, rngValue, Optional typeValue)
