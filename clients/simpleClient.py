@@ -28,8 +28,7 @@ import socket
 import sys
 import hashlib
 
-#host = '127.0.0.1'
-host = '172.16.2.21'
+host = '127.0.0.1'
 port = 8568
 size = 4096
 
