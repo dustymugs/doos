@@ -11,12 +11,44 @@
 PATH=/usr/local/doos:/usr/local/bin:/usr/bin:/bin
 
 start() {
-  /bin/su nobody -c "/usr/local/doos/doos.py > /dev/null 2>&1 &"
+	echo -n "Starting doos"
+ 	/bin/su nobody -c "/usr/local/doos/doos.py > /dev/null 2>&1 &"
+
+	ps=`ps aux | grep doos | grep -v grep | grep -v rc\.doos`
+	sleep 2
+
+	for ((a=0; a < 5; a++)); do
+		echo -n "."
+		if [[ ${#ps} > 0 ]]; then
+			echo " OK"
+			exit 0
+		fi
+
+		sleep 2
+		ps=`ps aux | grep doos | grep -v grep | grep -v rc\.doos`
+	done
+
+	echo " FAIL???"
 }
 
 stop() {
+	echo -n "Stopping doos"
   /usr/local/doos/clients/simpleClient.py terminate > /dev/null 2>&1
-  sleep 20
+	ps=`ps aux | grep doos | grep -v grep | grep -v rc\.doos`
+	sleep 2
+
+	for ((a=0; a < 15; a++)); do
+		echo -n "."
+		if [[ ${#ps} = 0 ]]; then
+			echo " OK"
+			exit 0
+		fi
+		
+		sleep 2
+		ps=`ps aux | grep doos | grep -v grep | grep -v rc\.doos`
+	done
+
+	echo " FAIL???"
 }
 
 restart() {
