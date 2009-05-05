@@ -21,7 +21,7 @@ start() {
 		echo -n "."
 		if [[ ${#ps} > 0 ]]; then
 			echo " OK"
-			exit 0
+			return
 		fi
 
 		sleep 2
@@ -41,7 +41,7 @@ stop() {
 		echo -n "."
 		if [[ ${#ps} = 0 ]]; then
 			echo " OK"
-			exit 0
+			return
 		fi
 		
 		sleep 2
@@ -53,6 +53,7 @@ stop() {
 
 restart() {
   stop
+	sleep 5
   start
 }
 

@@ -79,6 +79,7 @@ class requestHandler(threading.Thread):
 				if buf == '':
 					raise socket.error("Socket has been broken before transmission completed. It probably failed.")
 				data_chunks.append(buf)
+
 				#find out how many bytes will be sent
 				if bytesExpected is None:  #if we still haven't determined the number of bytes to expect
 					buf = "".join(data_chunks) #in case the bytesExpected number was in another buffering, join whatever we've got
@@ -88,6 +89,10 @@ class requestHandler(threading.Thread):
 						bytesExpected = int(buf[:i])  #bytesExpected is the string from the beginning until the |
 						data_chunks = [ buf[i+1:] ]  #we probably have more than just bytesExpected in the buffer, so store that data
 						bytesGotten = len( data_chunks[0] )
+				else:
+					bytesGotten += len(buf)
+
+				self.log('Received ' + str(bytesGotten) + ' bytes of expected ' + str(bytesExpected) + ' bytes from client ' + self.remoteHostName + '.')
 
 				#if we're still determining the number of bytes to expect or we're still downloading the file,
 				if bytesExpected is None or bytesGotten < bytesExpected:
