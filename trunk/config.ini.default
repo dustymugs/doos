@@ -57,7 +57,7 @@ port=8568
 backlog=100
 
 ; the number of bytes for the network buffer to use.  This should be a fairly small number.
-socketBufferSize=4096
+socketBufferSize=16384
 
 ; If there is a socket error on server startup, keep trying to open the socket for this many attempts.
 ; An attempt will take place every 2 seconds
