@@ -52,23 +52,15 @@ try:
 			# read from keyboard
 			line = sys.stdin.readline().rstrip()
 
-		if line[:5] == 'file ':
-			file = open('/home/dustymugs/Work/OOo/' + line[5:])
+		if line[:5] == 'script ':
+			file = open(line[5:])
 			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
 			file.close()
 		elif line[:5] == 'host ':
 			print "Changing %s to %s" % (host, line[5:])
 			host = line[5:]
 			continue
-		elif line == "busy":
-			file = open('/home/dustymugs/Work/OOo/testwait.script')
-			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
-			file.close()
-		elif line == "sample":
-			file = open('/home/dustymugs/Work/OOo/test2.script')
-			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
-			file.close()
-		elif line == "exit" or line == "":
+		elif line == 'exit' or line == '':
 			break
 		else: #for sending raw commands
 			line = line + '::file start::'

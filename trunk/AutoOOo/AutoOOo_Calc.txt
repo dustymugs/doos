@@ -25,7 +25,7 @@ Function openCSV(fName As String, Optional hideDoc As Boolean)
 
 	Dim fProp(3) as new com.sun.star.beans.PropertyValue
 	fProp(0).Name = "FilterName"
-	fProp(0).Value = "scalc: Text - txt - csv (StarCalc)"
+	fProp(0).Value = "Text - txt - csv (StarCalc)"
 	' details provided in SDK Developer's Guide chapter 8.2.2
 	fProp(1).Name = "FilterOptions"
 	fProp(1).Value = "59/44,34,UTF8,1,"
