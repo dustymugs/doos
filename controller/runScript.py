@@ -171,7 +171,8 @@ class scriptRunner:
 		# replace placeholder <<TEMPLATEDIR>> with global template path
 		pathCorrected = pathCorrected.replace('<<TEMPLATEDIR>>', self.basePath + 'templates/')
 
-		file.truncate(0) #to make sure we overwrite the file
+		file.truncate() #to make sure we overwrite the file
+		file.seek(0)
 		file.write(pathCorrected)
 		file.close()
 
@@ -188,9 +189,11 @@ class scriptRunner:
 				badFlag = True
 			lines.append(l)
 		if badFlag:
-			file.truncate(0)
+			file.truncate()
+			file.seek(0)
 			file.writelines(lines)
-			file.close()
+
+		file.close()
 
 		executionSuccess = False
 		#make two attempts at execution
