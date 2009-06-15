@@ -17,23 +17,34 @@
 ' http://www.gnu.org/licenses/gpl-3.0-standalone.html
 '
 
-' open existing csv document
-Function openCSV(fName As String, Optional hideDoc As Boolean)
-	Dim oDoc As Object
+' sanitize spreadsheet for saving as a csv
+Function stripForCSV(oDoc As Object)
+	If NOT oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument") Then
+		stripForCSV = FALSE
+		Exit Function
+	End If
 
-	If IsMissing(hideDoc) Then hideDoc = FALSE
+	Dim oSheet As Object, oCursor As Object, oAdd As Object, oCell As Object
+	oSheet = oDoc.getCurrentController().getActiveSheet()
 
-	Dim fProp(3) as new com.sun.star.beans.PropertyValue
-	fProp(0).Name = "FilterName"
-	fProp(0).Value = "Text - txt - csv (StarCalc)"
-	' details provided in SDK Developer's Guide chapter 8.2.2
-	fProp(1).Name = "FilterOptions"
-	fProp(1).Value = "59/44,34,UTF8,1,"
-	fProp(2).Name = "Hidden"
-	fProp(2).Value = hideDoc
+	oCursor = oSheet.createCursor()
+	oCursor.gotoStartOfUsedArea(FALSE)
+	oCursor.gotoEndOfUsedArea(TRUE)
+	oAdd = oCursor.getRangeAddress()
 
-	oDoc = StarDesktop.loadComponentFromUrl(convertToURL(fName), "_blank", 0, fProp)
-	openCSV = oDoc
+	For row = oAdd.StartRow To oAdd.EndRow Step 1
+		For column = oAdd.StartColumn To oAdd.EndColumn Step 1
+			oCell = oSheet.getCellByPosition(column, row)
+			oCellString = oCell.String
+			oCellString = strReplace(oCellString, ",", ";") ' replace comma with semi-colon
+			oCellString = strReplace(oCellString, Chr(13) & Chr(10), " ") ' replace CRLF with space
+			oCellString = strReplace(oCellString, Chr(10), " ") ' replace LF with space
+			oCellString = strReplace(oCellString, Chr(13), " ") ' replace CR with space
+			oCell.String = oCellString
+		Next
+	Next
+
+	stripForCSV = TRUE
 End Function
 
 ' set the print area of the active sheet by named range

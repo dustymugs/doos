@@ -25,6 +25,71 @@ Function setPropertyValue(Optional cName As String, Optional uValue) As com.sun.
 	setPropertyValue = oPropertyValue
 End Function
 
+' open existing document
+Function openDocument(docName As String, Optional fileFilter, Optional filterOptions, Optional hideDoc As Boolean)
+	Dim oDoc As Object
+	Dim fProp(1) As Variant
+
+	If IsMissing(hideDoc) Then hideDoc = FALSE
+	fProp(0) = setPropertyValue("Hidden", hideDoc)
+	fProp(1) = setPropertyValue("FilterName", "")
+
+	If IsMissing(fileFilter) Or Len(CStr(fileFilter)) < 1 Then
+		cPosLast = 1
+		cPos = InStr(cPosLast, docName, ".")
+		While cPos <> 0
+			cPosLast = cPos
+			cPos = InStr(cPosLast + 1, docName, ".")
+		Wend
+		fileFilter = Right(docName, Len(docName) - cPosLast)
+	End If
+
+	' process fileFilter for extensions
+	' fileFilter can either be a file extension or the actual file filter name
+	Select Case fileFilter
+		Case "xls"
+			fProp(1) = setPropertyValue("FilterName", "MS Excel 97")
+		Case "doc"
+			fProp(1) = setPropertyValue("FilterName", "MS Word 97")
+		Case "odt"
+			fProp(1) = setPropertyValue("FilterName", "writer8")
+		Case "ods"
+			fProp(1) = setPropertyValue("FilterName", "calc8")
+		Case "txt","text"
+			fProp(1) = setPropertyValue("FilterName", "Text")
+		Case "csv", "tab"
+			fProp(1) = setPropertyValue("FilterName", "Text - txt - csv (StarCalc)")
+
+			ReDim Preserve fProp(2)
+			If IsMissing(filterOptions) Or Len(CStr(filterOptions)) < 1 Then
+				' details provided in SDK Developer's Guide chapter 8.2.2
+				If fileFilter = "csv" Then
+					fProp(2) = setPropertyValue("FilterOptions", "44,34,UTF8,1,")
+				Else
+					fProp(2) = setPropertyValue("FilterOptions", "9,34,UTF8,1,")
+				End If
+			Else
+				fProp(2) = setPropertyValue("FilterOptions", filterOptions)
+			End If
+	End Select
+
+	If Len(fileFilter) > 0 And Len(fProp(1).Value) < 1 Then
+		fProp(1) = setPropertyValue("FilterName", fileFilter)
+		If (NOT IsMissing(filterOptions)) And Len(Cstr(filterOptions)) > 0 Then
+			ReDim Preserve fProp(2)
+			fProp(2) = setPropertyValue("FilterOptions", filterOptions)
+		End If
+	End If
+
+	If Len(fProp(1).Value) < 1 Then
+		openDocument = FALSE
+		Exit Function
+	End If
+
+	oDoc = StarDesktop.loadComponentFromUrl(convertToURL(docName), "_blank", 0, fProp())
+	openDocument = oDoc
+End Function
+
 ' create new document from a template file
 ' the templateName should contain the full physical path and filename
 ' the templateName will be converted to URL format
@@ -61,11 +126,14 @@ End Function
 ' save document
 ' the docName should contain the full physical path and filename
 ' the docName will be converted to URL format
-Function saveDocToPath(oDoc As Object, docName As String, Optional fileFilter, Optional overWrite As Boolean)
-	Dim a(1) As New com.sun.star.beans.PropertyValue
+Function saveDocToPath(oDoc As Object, docName As String, Optional fileFilter, Optional filterOptions, Optional overWrite As Boolean)
+	Dim a(1) As Variant
 	Dim cPos As Long, cPosLast As Long
 
 	If IsMissing(overWrite) Then overWrite = FALSE
+	a(0) = setPropertyValue("Overwrite", overWrite)
+	a(1) = setPropertyValue("FilterName", "")
+
 	' fileFilter not set
 	' try to retrieve the file extension
 	If IsMissing(fileFilter) Or Len(CStr(fileFilter)) < 1 Then
@@ -82,57 +150,64 @@ Function saveDocToPath(oDoc As Object, docName As String, Optional fileFilter, O
 	' fileFilter can either be a file extension or the actual file filter name
 	Select Case fileFilter
 		Case "xls"
-			fileFilter = "MS Excel 97"
+			a(1) = setPropertyValue("FilterName", "MS Excel 97")
 		Case "doc"
-			fileFilter = "MS Word 97"
+			a(1) = setPropertyValue("FilterName", "MS Word 97")
 		Case "odt"
-			fileFilter = "writer8"
+			a(1) = setPropertyValue("FilterName", "writer8")
 		Case "ods"
-			fileFilter = "calc8"
+			a(1) = setPropertyValue("FilterName", "calc8")
 		Case "odf"
 			' Calc
 			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
-				fileFilter = "calc8"
+				a(1) = setPropertyValue("FilterName", "calc8")
 			' Writer
 			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
-				fileFilter = "writer8"
+				a(1) = setPropertyValue("FilterName", "writer8")
 			End If
 		Case "html"
 			' Calc
 			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
-				fileFilter = "HTML (StarCalc)"
+				a(1) = setPropertyValue("FilterName", "HTML (StarCalc)")
 			' Writer
 			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
-				fileFilter = "HTML (StarWriter)"
+				a(1) = setPropertyValue("FilterName", "HTML (StarWriter)")
 			End If
 		Case "txt","text","csv"
 			' Calc
 			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
-				fileFilter = "Text - txt - csv (StarCalc)"
+				a(1) = setPropertyValue("FilterName", "Text - txt - csv (StarCalc)")
 			' Writer
 			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
-				fileFilter = "Text"
+				a(1) = setPropertyValue("FilterName", "Text")
 			End If
 		Case "pdf"
 			' Calc
 			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
-				fileFilter = "calc_pdf_Export"
+				a(1) = setPropertyValue("FilterName", "calc_pdf_Export")
 			' Writer
 			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
-				fileFilter = "writer_pdf_Export"
+				a(1) = setPropertyValue("FilterName", "writer_pdf_Export")
+			End If
+		Case "rtf"
+			' Calc
+			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
+				a(1) = setPropertyValue("FilterName", "Rich Text Format (StarCalc)")
+			' Writer
+			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
+				a(1) = setPropertyValue("FilterName", "Rich Text Format")
 			End If
 	End Select
 
-	If Len(fileFilter) < 1 Then
+	If (NOT IsMissing(filterOptions)) And Len(Cstr(filterOptions)) > 0 Then
+		ReDim Preserve a(2)
+		a(2) = setPropertyValue("FilterOptions", filterOptions)
+	End If
+
+	If Len(a(1).Value) < 1 Then
 		saveDocToPath = FALSE
 		Exit Function
 	End If
-
-	' save settings
-	a(0).Name = "Overwrite"
-	a(0).Value = overWrite
-	a(1).Name = "FilterName"
-	a(1).Value = fileFilter
 
 	' for export filters, use ToURL instead of AsURL otherwise exception thrown
 	If InStr(fileFilter, "_Export") <> 0 Then
