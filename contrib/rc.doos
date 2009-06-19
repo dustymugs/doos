@@ -8,11 +8,12 @@
 # file executable:  chmod 755 /etc/rc.d/rc.doos
 #
 
-PATH=/usr/local/doos:/usr/local/bin:/usr/bin:/bin
+DOOSPATH=/usr/local/doos
+PATH=${DOOSPATH}:/usr/local/bin:/usr/bin:/bin
 
 start() {
 	echo -n "Starting doos"
- 	/bin/su nobody -c "/usr/local/doos/doos.py > /dev/null 2>&1 &"
+ 	/bin/su nobody -c "${DOOSPATH}/doos.py > /dev/null 2>&1 &"
 
 	ps=`ps aux | grep doos | grep -v grep | grep -v rc\.doos`
 	sleep 2
@@ -33,7 +34,7 @@ start() {
 
 stop() {
 	echo -n "Stopping doos"
-  /usr/local/doos/clients/simpleClient.py terminate > /dev/null 2>&1
+  ${DOOSPATH}/clients/simpleClient.py terminate > /dev/null 2>&1
 	ps=`ps aux | grep doos | grep -v grep | grep -v rc\.doos`
 	sleep 2
 

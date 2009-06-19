@@ -52,8 +52,8 @@ try:
 			# read from keyboard
 			line = sys.stdin.readline().rstrip()
 
-		if line[:5] == 'script ':
-			file = open(line[5:])
+		if line[:7] == 'script ':
+			file = open(line[7:])
 			line = args + '::file start::' + '::file content::' + file.read() + '::file end::'
 			file.close()
 		elif line[:5] == 'host ':

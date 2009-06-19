@@ -1,0 +1,12 @@
+Sub Main()
+	On Error GoTo ABORT
+	Dim oDoc As Object, oSheet As Object, oCell As Object
+	GoTo TheEND
+
+	ABORT:
+		On Error GoTo TheEND
+	
+	TheEND:
+		Exit Sub
+End Sub
+
