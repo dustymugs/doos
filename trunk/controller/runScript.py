@@ -18,7 +18,7 @@ http://www.gnu.org/licenses/gpl-3.0-standalone.html
 '''
 
 '''
-This is the class which controls OpenOffice.  You can see from singleProcess.py which functions need to be implemented if you want to write 
+This is the class which controls OpenOffice.org.  You can see from singleProcess.py which functions need to be implemented if you want to write 
 a class like this for another program.
 
 TODO:
@@ -50,7 +50,7 @@ class scriptRunner:
 
 		self.instanceId = instanceId
 		self.basePath = homeDir
-		self.home = homeDir + "home" + str(instanceId) + '/'
+		self.home = homeDir + 'home' + str(instanceId) + '/'
 		self.shuttingDown = False
 		self.waitMutex = waitMutex
 		self.executionMutex = threading.Lock()
@@ -60,14 +60,31 @@ class scriptRunner:
 		else:
 			self.maxDispatchAttempts = 2
 
+		if CFG.has_section('runscript') and CFG.has_option('runscript', 'maxProcessLife'):
+			self.maxProcessLife = int(CFG.get('runscript', 'maxProcessLife'))
+		else:
+			self.maxProcessLife = 259200
+
 		self.singleProcess = singleProcess
 		self.log = singleProcess.server.log
 
 		if CFG.has_section('runscript') and CFG.has_option('runscript', 'sofficepath'):
 			self.sofficepath = CFG.get('runscript', 'sofficepath')
 		else:
-			self.log('Missing sofficepath setting for thread ' + self.instanceId + '.  Stopping initialization.')
+			self.log('Missing sofficepath setting for thread ' + self.instanceId + '.  Using default of no path.')
 			self.sofficepath = ''
+
+		# clean output directory
+		try:
+			output = self.home + 'output/'
+			self.log('Cleaning home output directory: ' + output + '.')
+			for element in os.listdir(output):
+				if os.path.isfile(output + element):
+					os.unlink(output + element)
+				elif os.path.isdir(output + element):
+					shutil.rmtree(output + element)
+		except Exception:
+			self.log('Unable to clean home output directory: ' + output + '.')
 
 		self.startOO()
 
@@ -76,7 +93,7 @@ class scriptRunner:
 		#(even opening them through subprocess can cause a deadlock if two happen simultaneously)
 		self.waitMutex.acquire()
 
-		#create a new OpenOffice process and have it listen on a pipe
+		#create a new OpenOffice.org process and have it listen on a pipe
 		self.childOffice = \
 			subprocess.Popen( (self.sofficepath + 'soffice', "-accept=pipe,name=doosPipe" + str(self.instanceId) + ";urp;", "-headless", "-nofirststartwizard"), \
 				env={ "PATH": os.environ["PATH"], \
@@ -110,12 +127,14 @@ class scriptRunner:
 		self.resolver = localContext.ServiceManager.createInstanceWithContext(
 			"com.sun.star.bridge.UnoUrlResolver", localContext )
 
-		self.log("Done initializing OpenOffice for thread " + self.instanceId)
+		# record the start time of the thread
+		self.timestamp = time.time()
+		self.log("Done initializing OpenOffice.org for thread " + self.instanceId)
 
 	def deathNotify(self, deadChildren):
 		'''
 		Called when the watchdog detects the death of the child office process.  This function waits until any pending job's execute()
-		procedure is finished before restarting Open Office.
+		procedure is finished before restarting OpenOffice.org.
 		self.execute() will determine whether or not the OOo instance crashed during the job, so deathNotify competes with execute() for
 		the executionMutex.
 		We only want to kill the PIDs active at the time deathNotify is run, and we only do that if one of the dead children is in the 
@@ -129,7 +148,7 @@ class scriptRunner:
 		for deadbaby in deadChildren:
 			if deadbaby in familyTree:
 				self.executionMutex.acquire()
-				self.log("Thread " + self.instanceId + "'s OpenOffice instance has died. Restarting it.", 'error\t')
+				self.log("Thread " + self.instanceId + "'s OpenOffice.org instance has died. Restarting it.", 'error\t')
 				utils.kill( familyTree, self.waitMutex )
 				self.startOO()
 				self.executionMutex.release()
@@ -138,7 +157,7 @@ class scriptRunner:
 
 	def getPIDs(self):
 		'''
-		Returns string representations of the PIDs OpenOffice instance spawned by this thread and any direct children that instance may have.
+		Returns string representations of the PIDs OpenOffice.org instance spawned by this thread and any direct children that instance may have.
 		'''
 		return [str(self.childOffice.pid)] + self.grandchildren
 
@@ -148,7 +167,7 @@ class scriptRunner:
 			any output files produced by the macro.  Search through the macro file and replace any instances of <<OUTDIR>> with the place
 			we want the script to send output, which is the ticket folder we created.
 
-		Grab the script located at dirpath, then connect to OpenOffice and run it.
+		Grab the script located at dirpath, then connect to OpenOffice.org and run it.
 		When done, move the folder we created to the program folder/files/output
 		'''
 		(junk, ticketNumber) = (dirpath.rstrip('/')).rsplit('/', 1) #the ticket number is what's at the end of the path to the input file
@@ -230,11 +249,11 @@ class scriptRunner:
 				# I do this here by calling a cheap synchronous call (getPropertyValue).
 				self.ctx.ServiceManager
 
-				self.log('Thread ' + self.instanceId + "'s OpenOffice is finished with job " + ticketNumber + '.  Now packaging...')
+				self.log('Thread ' + self.instanceId + "'s OpenOffice.org is finished with job " + ticketNumber + '.  Now packaging...')
 
-			#if OpenOffice crashed
+			#if OpenOffice.org crashed
 			except Exception, (message):
-				self.log("Open Office crashed for thread " + self.instanceId + " (message: " + str(message) + \
+				self.log("OpenOffice.org crashed for thread " + self.instanceId + " (message: " + str(message) + \
 					") during execution of job number " + \
 					ticketNumber + ".  " + str(self.maxDispatchAttempts - i) + " attempt(s) remaining before job is abandoned.\n", 'error\t')
 
@@ -278,13 +297,24 @@ class scriptRunner:
 						shutil.rmtree(self.home + 'output/' + ticketNumber)
 					except Exception:
 						self.log("Unable to remove directory: " + self.home + 'output/' + ticketNumber)
+					# add check of whether or not to kill the OOo process
+					# rather than doing this elsewhere, this is the best spot
+					# due to OpenOffice.org having known memory leaks after processing documents
+					# so what better place than after a job is complete
+					finally:
+						if int(time.time() - self.timestamp) > self.maxProcessLife:
+							self.log('The OpenOffice.org process for thread ' + self.instanceId + ' has exceeded the max process life.  Restarting the process.')
+							#only the PIDs which this iteration of the loop started with can be returned by getPIDs, because
+							#execute() has the executionMutex, which is necessary for deathNotify() to restart OO.
+							utils.kill(self.getPIDs(), self.waitMutex)
+							self.startOO()
 
 			executionSuccess = True
 
 			#we won't get here if the job failed too many times because of the continue statement, so we don't need to worry about
 			self.executionMutex.release() #releasing the lock when it isn't locked.
 
-			break #if we made it this far, Open Office didn't crash, so we don't need to re-try.
+			break #if we made it this far, OpenOffice.org didn't crash, so we don't need to re-try.
 
 		return executionSuccess
 

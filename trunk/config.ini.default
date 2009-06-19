@@ -95,6 +95,11 @@ maxDispatchAttempts=2
 # path to executable soffice
 sofficepath=/opt/openoffice.org2.4/program/
 
+# maximum life of the process controlled by runScript
+# once the maximum life is exceeded, the controlled process is restarted
+# default is 72 hrs
+maxProcessLife=259200
+
 ; doosbags to load
 ;[doosbags]
 ; TODO: The server will look for these in the doosbags folder where the server is installed.
