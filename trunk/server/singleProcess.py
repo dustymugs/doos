@@ -47,7 +47,7 @@ class singleProcess (threading.Thread):
 		self.log = server.log
 		self.home = server.home
 
-		self.ooScriptRunner = runScript.scriptRunner(self.threadId, self.home, self.server.waitMutex, self)
+		self.scriptRunner = runScript.scriptRunner(self.threadId, self.home, self.server.waitMutex, self)
 
 		self.myKidsMutex = threading.Lock() #prevents conflicts between getPIDs() and deathNotify()
 		self.shuttingDown = False
@@ -89,7 +89,7 @@ class singleProcess (threading.Thread):
 			file.close()
 
 			#execution stage
-			success = self.ooScriptRunner.execute(dirpath, args)
+			success = self.scriptRunner.execute(dirpath, args)
 
 			#write the job's status to status.txt now that it's done
 			file = open(self.home + 'files/output/' + str(ticketNumber) + '/status.txt', 'a')
@@ -121,7 +121,7 @@ class singleProcess (threading.Thread):
 		'''
 		if not self.shuttingDown:
 			self.myKidsMutex.acquire()
-			newProcessList = self.ooScriptRunner.deathNotify(deadKids)
+			newProcessList = self.scriptRunner.deathNotify(deadKids)
 			self.myKidsMutex.release()
 
 	def getPIDs(self):
@@ -138,7 +138,7 @@ class singleProcess (threading.Thread):
 		'''
 		#use the myKidsMutex so that deathNotify doesn't screw with this
 		self.myKidsMutex.acquire()
-		myKids = self.ooScriptRunner.getPIDs()
+		myKids = self.scriptRunner.getPIDs()
 		self.myKidsMutex.release()
 		return myKids
 
@@ -157,5 +157,5 @@ class singleProcess (threading.Thread):
 		utils.kill([pids], self.server.waitMutex)
 
 		self.server.watchdog.removeThread(self.threadId) #inform watchdog that this thread is shutting down
-		self.ooScriptRunner.clear()
+		self.scriptRunner.clear()
 		self.server = None
