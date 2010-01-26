@@ -89,6 +89,9 @@ Function openDocument(docName As String, Optional fileFilter, Optional filterOpt
 	oDoc = StarDesktop.loadComponentFromUrl(convertToURL(docName), "_blank", 0, fProp())
 	openDocument = oDoc
 End Function
+Function openD(dN As String, Optional fF, Optional fO, Optional hD As Boolean)
+	openD = openDocument(dN, fF, fO, hD)
+End Function
 
 ' create new document from a template file
 ' the templateName should contain the full physical path and filename
@@ -99,6 +102,9 @@ Function newDocFromTemplate(templateName As String, Optional hideDoc As Boolean)
 	If IsMissing(hideDoc) Then hideDoc = FALSE
 	oDoc = StarDesktop.loadComponentFromUrl(convertToURL(templateName), "_blank", 0, Array(setPropertyValue("AsTemplate", TRUE), setPropertyValue("Hidden", hideDoc)))
 	newDocFromTemplate = oDoc
+End Function
+Function newDFT(tN As String, Optional hD As Boolean)
+	newDFT = newDocFromTemplate(tN, hD)
 End Function
 
 ' create new document
@@ -121,6 +127,9 @@ Function newDocument(typeDocument As String, Optional hideDoc As Boolean)
 
 	oDoc = StarDesktop.loadComponentFromUrl(aURL, "_blank", 0, Array(setPropertyValue("Hidden", hideDoc)))
 	newDocument = oDoc
+End Function
+Function newD(tD As String, Optional hD As Boolean)
+	newD = newDocument(tD, hD)
 End Function
 
 ' save document
@@ -216,6 +225,9 @@ Function saveDocToPath(oDoc As Object, docName As String, Optional fileFilter, O
 		oDoc.storeAsURL(convertToURL(docName), a())
 	End If
 End Function
+Function saveDTP(o As Object, dN As String, Optional fF, Optional fO, Optional oW As Boolean)
+	saveDTP = saveDocToPath(o, dN, fF, fO, oW)
+End Function
 
 ' close document with override to force closure
 Function closeDocument(oDoc As Object, Optional forceClose As Boolean)
@@ -236,6 +248,9 @@ Function closeDocument(oDoc As Object, Optional forceClose As Boolean)
 	End If
 
 	oDoc.close(True)
+End Function
+Function closeD(oD As Object, Optional fC As Boolean)
+	closeDocument(oD, fC)
 End Function
 
 ' reads in a file line by line to a string
