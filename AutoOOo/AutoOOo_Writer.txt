@@ -33,6 +33,9 @@ Sub setValueInTextTableCell(oDoc as Object, value As String, Optional replace As
 	oTC = oText.createTextCursorByRange(oText.getText())
 	oText.insertString(oTC, value, replace)
 End Sub
+Sub setVITTC(o as Object, v As String, Optional r As Boolean)
+	setValueInTextTableCell(o, v, r)
+End Sub
 
 ' shift cursor within texttable by a direction and an increment value
 ' this moves the cursor to a new cell
@@ -57,6 +60,9 @@ Sub shiftCursorWithinTextTable(oDoc, direction As String, Optional Increment)
 			oVC.goDown(Increment, FALSE)
 	End Select
 End Sub
+Sub shiftCWTT(o, d As String, Optional I)
+	shiftCursorWithinTextTable(o, d, I)
+End Sub
 
 ' move cursor within texttable by cell to jump to
 Sub jumpCursorWithinTextTable(oDoc as Object, column As Integer, row As Integer)
@@ -70,6 +76,9 @@ Sub jumpCursorWithinTextTable(oDoc as Object, column As Integer, row As Integer)
 
 	oTable = oVC.TextTable
 	oVC.gotoRange(oTable.getCellByPosition(column, row), FALSE)
+End Sub
+Sub jumpCWTT(o, c As Integer, r As Integer)
+	jumpCursorWithinTextTable(o, c, r)
 End Sub
 
 ' put cursor into texttable
@@ -85,6 +94,9 @@ Sub moveCursorIntoTextTable(oDoc as Object, tableName As String, Optional column
 
 	jumpCursorWithinTextTable(column, row)
 End Sub
+Sub moveCITT(o as Object, tN As String, Optional c, Optional r)
+	moveCursorIntoTextTable(o, tN, c, r)
+End Sub
 
 ' set a value at position indicated by bookmark
 ' this does not move the visible cursor
@@ -93,6 +105,9 @@ Sub setValueByBookMark(oDoc as Object, bmName As String, value As String)
 
 	oBkMk = oDoc.getBookmarks().getByName(bmName)
 	oBkMk.getAnchor().setString(value)
+End Sub
+Sub setVBBM(o as Object, bN As String, v As String)
+	setValueByBookMark(o, bN, v)
 End Sub
 
 ' move visible cursor to bookmark
@@ -103,4 +118,7 @@ Sub moveCursorToBookMark(oDoc as Object, bmName As String)
 	oVC = oDoc.getCurrentController().getViewCursor()
 	oBkMk = oDoc.getBookmarks().getByName(bmName).getAnchor()
 	oVC.gotoRange(oBkMk, FALSE)
+End Sub
+Sub moveCTBM(o as Object, bN As String)
+	moveCursorToBookMark(o, bN)
 End Sub

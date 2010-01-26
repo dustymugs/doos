@@ -46,6 +46,9 @@ Function stripForCSV(oDoc As Object)
 
 	stripForCSV = TRUE
 End Function
+Function stripFC(o As Object)
+	stripFC = stripForCSV(o)
+End Function
 
 ' set the print area of the active sheet by named range
 Function setPrintAreaByNamedRange(oDoc as Object, rngName as String)
@@ -58,6 +61,10 @@ Function setPrintAreaByNamedRange(oDoc as Object, rngName as String)
 	oRangeAddress = oSheet.getCellRangeByName(rngName).rangeAddress
 	setPrintAreaByPosition(oDoc, oRangeAddress.startColumn, oRangeAddress.StartRow, oRangeAddress.EndColumn, oRangeAddress.EndRow)
 End Function
+Function setPABNR(o As Object, r as String)
+	setPrintAreaByNamedRange(o, r)
+End Function
+
 
 ' set the print area of the active sheet by position
 ' indexes are zero-based
@@ -74,6 +81,10 @@ Function setPrintAreaByPosition(oDoc as Object, column1 as Integer, row1 as Inte
 	areaPrint(0).EndRow = row2
 	oSheet.setPrintAreas(areaPrint)
 End Function
+Function setPABP(o as Object, c1 as Integer, r1 as Integer, c2 as Integer, r2 as Integer)
+	setPrintAreaByPosition(o, c1, r1, c2, r2)
+End Function
+
 
 ' set the value of a cell referenced by named range
 ' see about determining the value type before assignment
@@ -104,6 +115,9 @@ Function setCellByNamedRange(oDoc as Object, rngName As String, rngValue, Option
 	End Select
 
 End Function
+Function setCBNR(o as Object, rN As String, rV, Optional tV)
+	setCellByNamedRange(o, rN, rV, tV)
+End Function
 
 ' get cell object using named range
 ' see about handling named range not referencing a single cell
@@ -114,6 +128,9 @@ Function getCellByNamedRange(oDoc as Object, rngName As String)
 	oRange = oSheet.getCellRangeByName(rngName)
 
 	getCellByNamedRange = oRange
+End Function
+Function getCBNR(o as Object, r As String)
+	getCBNR = getCellByNamedRange(o, r)
 End Function
 
 ' place selection (and focus) on a cell referenced by name range
@@ -126,6 +143,9 @@ Function selectCellByNamedRange(oDoc as Object, rngName As String)
 	oDoc.getCurrentController().select(oRange)
 
 	selectCellByNamedRange = oDoc.getCurrentSelection()
+End Function
+Function selectCBNR(o as Object, r As String)
+	selectCBNR = selectCellByNamedRange(o, r)
 End Function
 
 ' set value of cell using column and row indexes
@@ -156,6 +176,9 @@ Function setCellByPosition(oDoc as Object, column As Integer, row As Integer, ce
 
 	setCellByPosition = oCell
 End Function
+Function setCBP(o as Object, c As Integer, r As Integer, cV, Optional tV)
+	setCBP = setCellByPosition(o, c, r, cV, tV)
+End Function
 
 ' place selection (and focus) on cell referenced by column and row indexes
 ' indexes are zero-based
@@ -167,6 +190,9 @@ Function selectCellByPosition(oDoc as Object, column As Integer, row As Integer)
 	oDoc.getCurrentController().select(oCell)
 	selectCellByPosition = oCell
 End Function
+Function selectCBP(o as Object, c As Integer, r As Integer)
+	selectCBP = selectCellByPosition(o, c, r)
+End Function
 
 ' make sheet active by name
 Function setActiveSheetByName(oDoc as Object, sheetName As String)
@@ -177,6 +203,9 @@ Function setActiveSheetByName(oDoc as Object, sheetName As String)
 '	oDoc.getCurrentController().select(oSheet)
 	setActiveSheetByName = oSheet
 End Function
+Function setASBN(o as Object, sN As String)
+	setASBN = setActiveSheetByName(o, sN)
+End Function
 
 ' copy a sheet by sheet name
 ' if index isn't provided, automatically put new sheet at the end
@@ -186,6 +215,9 @@ Function copySheetByName(oDoc as Object, srcName As String, dstName As String, O
 
 	oDoc.getSheets().copyByName(srcName, dstName, dstIndex)
 	copySheetByName = oDoc.getSheets().getByName(dstName)
+End Function
+Function copySBN(o as Object, sN As String, dN As String, Optional dI)
+	copySBN = copySheetByName(o, sN, dN, dI)
 End Function
 
 ' create new sheet
@@ -215,6 +247,9 @@ Function addNewSheet(oDoc as Object, Optional sheetName, Optional sheetIndex)
 	' return new sheet object
 	addNewSheet = oSheets.getByName(sheetName)
 End Function
+Function addNS(o as Object, Optional sN, Optional sI)
+	addNS = addNewSheet(o, sN, sI)
+End Function
 
 ' merge cells by range name
 ' range name would be something like C4:E4
@@ -227,6 +262,9 @@ Function mergeCellsByRange(oDoc as Object, rngName as String)
 	
 	mergeCellsByRange = oRange
 End Function
+Function mergeCBR(o as Object, rN as String)
+	mergeCBR = mergeCellsByRange(o, rN)
+End Function
 
 ' merge cells by cell positions
 ' indexes are zero-based
@@ -238,6 +276,9 @@ Function mergeCellsByPosition(oDoc as Object, column1 As Integer, row1 As Intege
 	oRange.Merge(TRUE)
 	
 	mergeCellsByPosition = oRange
+End Function
+Function mergeCBP(o as Object, c1 As Integer, r1 As Integer, c2 As Integer, r2 As Integer)
+	mergeCBP = mergeCellsByPosition(o, c1, r1, c2, r2)
 End Function
 
 ' create a new BorderLine with passed values
@@ -259,4 +300,7 @@ Function newBorderLine(Optional color, Optional innerWidth, Optional outerWidth,
 	borderStyle.LineDistance = distance
 
 	newBorderLine = borderStyle
+End Function
+Function newBL(Optional c, Optional iW, Optional oW, Optional d)
+	newBL = newBorderLine(c, iW, oW, d)
 End Function
