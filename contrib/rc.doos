@@ -8,12 +8,13 @@
 # file executable:  chmod 755 /etc/rc.d/rc.doos
 #
 
+PYTHONPATH=/opt/openoffice.org3/program
 DOOSPATH=/usr/local/doos
-PATH=${DOOSPATH}:/usr/local/bin:/usr/bin:/bin
+PATH=${DOOSPATH}:${PYTHONPATH}:/usr/local/bin:/usr/bin:/bin
 
 start() {
 	echo -n "Starting doos"
- 	/bin/su nobody -c "${DOOSPATH}/doos.py > /dev/null 2>&1 &"
+ 	/bin/su nobody -c "${PYTHONPATH}/python ${DOOSPATH}/doos.py > /dev/null 2>&1 &"
 
 	ps=`ps aux | grep doos | grep -v grep | grep -v rc\.doos`
 	sleep 2
