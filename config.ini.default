@@ -15,20 +15,20 @@
 ;				output/
 ;
 ;			home0/
-;				.fontconfig/          -------------- .fontconfig and .openoffice.org2.0 are the config files needed for each instance of OO
-;				.openoffice.org2.0/   -------------- to run simultaneously (they all need their own copies of config files). 
+;				.fontconfig/          -------------- .fontconfig and .openoffice.org are the config files needed for each instance of OO
+;				.openoffice.org/   -------------- to run simultaneously (they all need their own copies of config files). 
 ;				output/ 
 ;			home1/
 ;				.fontconfig/
-;				.openoffice.org2.0/
+;				.openoffice.org/
 ;				output/  ---------------------------- output stores the output files of macros while they're still being worked on
 ;			home2/
 ;				.fontconfig/
-;				.openoffice.org2.0/
+;				.openoffice.org/
 ;				output/
 ;			home3/
 ;				.fontconfig/
-;				.openoffice.org2.0/
+;				.openoffice.org/
 ;				output/
 ;
 ;		...(up to 'home' + numSingleProcesses)
@@ -93,7 +93,7 @@ maxTicketNumber=15999999
 maxDispatchAttempts=2
 
 # path to executable soffice
-sofficepath=/opt/openoffice.org2.4/program/
+sofficepath=/opt/openoffice.org3/program/
 
 # maximum life of the process controlled by runScript
 # once the maximum life is exceeded, the controlled process is restarted
