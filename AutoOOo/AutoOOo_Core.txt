@@ -30,7 +30,7 @@ Function openDocument(docName As String, Optional fileFilter, Optional filterOpt
 	Dim oDoc As Object
 	Dim fProp(1) As Variant
 
-	If IsMissing(hideDoc) Then hideDoc = FALSE
+	If IsMissing(hideDoc) Then hideDoc = False
 	fProp(0) = setPropertyValue("Hidden", hideDoc)
 	fProp(1) = setPropertyValue("FilterName", "")
 
@@ -82,7 +82,7 @@ Function openDocument(docName As String, Optional fileFilter, Optional filterOpt
 	End If
 
 	If Len(fProp(1).Value) < 1 Then
-		openDocument = FALSE
+		openDocument = False
 		Exit Function
 	End If
 
@@ -99,8 +99,8 @@ End Function
 Function newDocFromTemplate(templateName As String, Optional hideDoc As Boolean)
 	Dim oDoc As Object
 
-	If IsMissing(hideDoc) Then hideDoc = FALSE
-	oDoc = StarDesktop.loadComponentFromUrl(convertToURL(templateName), "_blank", 0, Array(setPropertyValue("AsTemplate", TRUE), setPropertyValue("Hidden", hideDoc)))
+	If IsMissing(hideDoc) Then hideDoc = False
+	oDoc = StarDesktop.loadComponentFromUrl(convertToURL(templateName), "_blank", 0, Array(setPropertyValue("AsTemplate", True), setPropertyValue("Hidden", hideDoc)))
 	newDocFromTemplate = oDoc
 End Function
 Function newDFT(tN As String, Optional hD As Boolean)
@@ -112,7 +112,7 @@ End Function
 Function newDocument(typeDocument As String, Optional hideDoc As Boolean)
 	Dim oDoc As Object, aURL As String
 
-	If IsMissing(hideDoc) Then hideDoc = FALSE
+	If IsMissing(hideDoc) Then hideDoc = False
 
 	Select Case typeDocument
 		Case "text"
@@ -121,7 +121,7 @@ Function newDocument(typeDocument As String, Optional hideDoc As Boolean)
 			aURL = "private:factory/scalc"
 	End Select
 	If Len(aURL) < 1 Then
-		newDocument = FALSE
+		newDocument = False
 		Exit Function
 	End If
 
@@ -139,7 +139,7 @@ Function saveDocToPath(oDoc As Object, docName As String, Optional fileFilter, O
 	Dim a(1) As Variant
 	Dim cPos As Long, cPosLast As Long
 
-	If IsMissing(overWrite) Then overWrite = FALSE
+	If IsMissing(overWrite) Then overWrite = False
 	a(0) = setPropertyValue("Overwrite", overWrite)
 	a(1) = setPropertyValue("FilterName", "")
 
@@ -214,7 +214,7 @@ Function saveDocToPath(oDoc As Object, docName As String, Optional fileFilter, O
 	End If
 
 	If Len(a(1).Value) < 1 Then
-		saveDocToPath = FALSE
+		saveDocToPath = False
 		Exit Function
 	End If
 
@@ -231,11 +231,11 @@ End Function
 
 ' close document with override to force closure
 Function closeDocument(oDoc As Object, Optional forceClose As Boolean)
-	If IsMissing(forceClose) Then forceClose = FALSE
+	If IsMissing(forceClose) Then forceClose = False
 
 	' flagged so set document as not modified
 	If forceClose Then
-		oDoc.setModified(FALSE)
+		oDoc.setModified(False)
 	End If
 
 	' this should not run if flag set above
@@ -243,7 +243,7 @@ Function closeDocument(oDoc As Object, Optional forceClose As Boolean)
 		If (oDoc.hasLocation AND (NOT oDoc.isReadOnly)) Then
 			oDoc.store()
 		Else
-			oDoc.setModified(FALSE)
+			oDoc.setModified(False)
 		End If
 	End If
 

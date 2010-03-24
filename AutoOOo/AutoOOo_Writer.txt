@@ -26,7 +26,7 @@ Sub setValueInTextTableCell(oDoc as Object, value As String, Optional replace As
 		Exit Sub
 	End If
 
-	If IsMissing(replace) Then replace = FALSE
+	If IsMissing(replace) Then replace = False
 
 	oCurCell = oVC.Cell
 	oText = oCurCell.getText()
@@ -51,13 +51,13 @@ Sub shiftCursorWithinTextTable(oDoc, direction As String, Optional Increment)
 
 	Select Case LCase(direction)
 		Case "right"
-			oVC.goRight(Increment, FALSE)
+			oVC.goRight(Increment, False)
 		Case "left"
-			oVC.goLeft(Increment, FALSE)
+			oVC.goLeft(Increment, False)
 		Case "up"
-			oVC.goUp(Increment, FALSE)
+			oVC.goUp(Increment, False)
 		Case "down"
-			oVC.goDown(Increment, FALSE)
+			oVC.goDown(Increment, False)
 	End Select
 End Sub
 Sub shiftCWTT(o, d As String, Optional I)
@@ -75,7 +75,7 @@ Sub jumpCursorWithinTextTable(oDoc as Object, column As Integer, row As Integer)
 	End If
 
 	oTable = oVC.TextTable
-	oVC.gotoRange(oTable.getCellByPosition(column, row), FALSE)
+	oVC.gotoRange(oTable.getCellByPosition(column, row), False)
 End Sub
 Sub jumpCWTT(o, c As Integer, r As Integer)
 	jumpCursorWithinTextTable(o, c, r)
@@ -117,7 +117,7 @@ Sub moveCursorToBookMark(oDoc as Object, bmName As String)
 
 	oVC = oDoc.getCurrentController().getViewCursor()
 	oBkMk = oDoc.getBookmarks().getByName(bmName).getAnchor()
-	oVC.gotoRange(oBkMk, FALSE)
+	oVC.gotoRange(oBkMk, False)
 End Sub
 Sub moveCTBM(o as Object, bN As String)
 	moveCursorToBookMark(o, bN)
