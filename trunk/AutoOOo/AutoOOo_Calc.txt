@@ -20,7 +20,7 @@
 ' sanitize spreadsheet for saving as a csv
 Function stripForCSV(oDoc As Object)
 	If NOT oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument") Then
-		stripForCSV = FALSE
+		stripForCSV = False
 		Exit Function
 	End If
 
@@ -28,8 +28,8 @@ Function stripForCSV(oDoc As Object)
 	oSheet = oDoc.getCurrentController().getActiveSheet()
 
 	oCursor = oSheet.createCursor()
-	oCursor.gotoStartOfUsedArea(FALSE)
-	oCursor.gotoEndOfUsedArea(TRUE)
+	oCursor.gotoStartOfUsedArea(False)
+	oCursor.gotoEndOfUsedArea(True)
 	oAdd = oCursor.getRangeAddress()
 
 	For row = oAdd.StartRow To oAdd.EndRow Step 1
@@ -44,7 +44,7 @@ Function stripForCSV(oDoc As Object)
 		Next
 	Next
 
-	stripForCSV = TRUE
+	stripForCSV = True
 End Function
 Function stripFC(o As Object)
 	stripFC = stripForCSV(o)
@@ -65,7 +65,6 @@ Function setPABNR(o As Object, r as String)
 	setPrintAreaByNamedRange(o, r)
 End Function
 
-
 ' set the print area of the active sheet by position
 ' indexes are zero-based
 Function setPrintAreaByPosition(oDoc as Object, column1 as Integer, row1 as Integer, column2 as Integer, row2 as Integer)
@@ -84,7 +83,6 @@ End Function
 Function setPABP(o as Object, c1 as Integer, r1 as Integer, c2 as Integer, r2 as Integer)
 	setPrintAreaByPosition(o, c1, r1, c2, r2)
 End Function
-
 
 ' set the value of a cell referenced by named range
 ' see about determining the value type before assignment
@@ -153,6 +151,7 @@ End Function
 Function setCellByPosition(oDoc as Object, column As Integer, row As Integer, cellValue, Optional typeValue)
 	Dim oSheet, oCell
 	If IsMissing(typeValue) Then typeValue = "auto"
+	typeValue = LCase(typeValue)
 
 	oSheet = oDoc.getCurrentController().getActiveSheet()
 	oCell = oSheet.getCellByPosition(column, row)
@@ -178,6 +177,28 @@ Function setCellByPosition(oDoc as Object, column As Integer, row As Integer, ce
 End Function
 Function setCBP(o as Object, c As Integer, r As Integer, cV, Optional tV)
 	setCBP = setCellByPosition(o, c, r, cV, tV)
+End Function
+
+Function setCellSetByPosition(oDoc as Object, column As Integer, row As Integer, valueSet())
+	Dim i As Integer, j As Integer, rtn
+
+	If (NOT IsArray(valueSet)) Then
+		valueSet = Array(valueSet)
+	ElseIf LBound(valueSet) > UBound(valueSet) Then
+		setCellSetByPosition = False
+		Exit Function
+	End If
+
+	j = 0
+	For i = LBound(valueSet) To UBound(valueSet)
+		setCellByPosition(oDoc, column + j, row, valueSet(i), "auto")
+		j = j + 1
+	Next i
+
+	setCellSetByPosition = True
+End Function
+Function setCSBP(o as Object, c As Integer, r As Integer, v())
+	setCSBP = setCellSetByPosition(o, c, r, v)
 End Function
 
 ' place selection (and focus) on cell referenced by column and row indexes
@@ -258,7 +279,7 @@ Function mergeCellsByRange(oDoc as Object, rngName as String)
 
 	oSheet = oDoc.getCurrentController().getActiveSheet()
 	oRange = oSheet.getCellRangeByName(rngName)
-	oRange.Merge(TRUE)
+	oRange.Merge(True)
 	
 	mergeCellsByRange = oRange
 End Function
@@ -273,7 +294,7 @@ Function mergeCellsByPosition(oDoc as Object, column1 As Integer, row1 As Intege
 
 	oSheet = oDoc.getCurrentController().getActiveSheet()
 	oRange = oSheet.getCellRangeByPosition(column1, row1, column2, row2)
-	oRange.Merge(TRUE)
+	oRange.Merge(True)
 	
 	mergeCellsByPosition = oRange
 End Function
