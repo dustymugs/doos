@@ -118,7 +118,6 @@ Function setCBNR(o as Object, rN As String, rV, Optional tV)
 End Function
 
 ' get cell object using named range
-' see about handling named range not referencing a single cell
 Function getCellByNamedRange(oDoc as Object, rngName As String)
 	Dim oSheet, oRange
 
@@ -144,6 +143,20 @@ Function selectCellByNamedRange(oDoc as Object, rngName As String)
 End Function
 Function selectCBNR(o as Object, r As String)
 	selectCBNR = selectCellByNamedRange(o, r)
+End Function
+
+' get cell using column and row indexes
+' indexes are zero-based
+Function getCellByPosition(oDoc as Object, column As Integer, row As Integer)
+	Dim oSheet, oCell
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oCell = oSheet.getCellByPosition(column, row)
+
+	getCellByPosition = oCell
+End Function
+Function getCBP(o as Object, c As Integer, r As Integer)
+	getCBP = getCellByPosition(o, c, r)
 End Function
 
 ' set value of cell using column and row indexes
@@ -179,6 +192,7 @@ Function setCBP(o as Object, c As Integer, r As Integer, cV, Optional tV)
 	setCBP = setCellByPosition(o, c, r, cV, tV)
 End Function
 
+' indexes are zero-based
 Function setCellSetByPosition(oDoc as Object, column As Integer, row As Integer, valueSet())
 	Dim i As Integer, j As Integer, rtn
 
@@ -213,6 +227,34 @@ Function selectCellByPosition(oDoc as Object, column As Integer, row As Integer)
 End Function
 Function selectCBP(o as Object, c As Integer, r As Integer)
 	selectCBP = selectCellByPosition(o, c, r)
+End Function
+
+' get cell object using upper left corner and lower right corner of box
+' indexes are zero-based
+Function getCellRangeByPosition(oDoc as Object, column_ul As Integer, row_ul As Integer, column_lr As Integer, row_lr As Integer)
+	Dim oSheet, oRange
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oRange = oSheet.getCellRangeByPosition(column_ul, row_ul, column_lr, row_lr)
+
+	getCellRangeByPosition = oRange
+End Function
+Function getCRBP(o as Object, cu As Integer, ru As Integer, cl As Integer, rl As Integer)
+	getCRBP = getCellRangeByPosition(o, cu, ru, cl, rl)
+End Function
+
+' place selection (and focus) on cells referenced by upper left corner and lower right corner of box
+' indexes are zero-based
+Function selectCellRangeByPosition(oDoc As Object, column_ul As Integer, row_ul As Integer, column_lr As Integer, row_lr As Integer)
+	Dim oSheet, oRange
+
+	oSheet = oDoc.getCurrentController().getActiveSheet()
+	oRange = oSheet.getCellRangeByPosition(column_ul, row_ul, column_lr, row_lr)
+	oDoc.getCurrentController().select(oRange)
+	selectCellRangeByPosition = oRange
+End Function
+Function selectCRBP(o As Object, cu As Integer, ru As Integer, cl As Integer, rl As Integer)
+	selectCRBP = selectCellRangeByPosition(o, cu, ru, cl, rl)
 End Function
 
 ' make sheet active by name
