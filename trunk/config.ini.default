@@ -46,6 +46,9 @@ pythonpath=
 ; have 1 singleProcess instance for every CPU core which you want to occupy.
 numSingleProcesses=1
 
+; maximum age in days of stale jobs in the workspace/files/[input|output] directories
+maxJobAge=7
+
 ; Network
 [net]
 ; Hostname of the server. If the host is empty, the hostname will be determined by socket.getsockname()

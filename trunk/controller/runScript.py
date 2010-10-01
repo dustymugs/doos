@@ -297,11 +297,11 @@ class scriptRunner:
 						shutil.rmtree(self.home + 'output/' + ticketNumber)
 					except Exception:
 						self.log("Unable to remove directory: " + self.home + 'output/' + ticketNumber)
-					# add check of whether or not to kill the OOo process
-					# rather than doing this elsewhere, this is the best spot
-					# due to OpenOffice.org having known memory leaks after processing documents
-					# so what better place than after a job is complete
 					finally:
+						# add check of whether or not to kill the OOo process
+						# rather than doing this elsewhere, this is the best spot
+						# due to OpenOffice.org having known memory leaks after processing documents
+						# so what better place than after a job is complete
 						if int(time.time() - self.timestamp) > self.maxProcessLife:
 							self.log('The OpenOffice.org process for thread ' + self.instanceId + ' has exceeded the max process life.  Restarting the process.')
 							#only the PIDs which this iteration of the loop started with can be returned by getPIDs, because
