@@ -22,6 +22,8 @@ import socket
 import sys
 import threading
 import ConfigParser
+import shutil
+from random import randrange
 from Queue import Queue
 import datetime, time
 
@@ -67,6 +69,11 @@ class Server:
 			self.numSingleProcesses = int(CFG.get('server', 'numSingleProcesses'))
 		else:
 			self.numSingleProcesses = 1
+
+		if CFG.has_section('server') and CFG.has_option('server', 'maxJobAge'):
+			self.maxJobAge = int(CFG.get('server', 'maxJobAge'))
+		else:
+			self.maxJobAge = 7
 
 		if CFG.has_section('net') and CFG.has_option('net', 'serverSocketRetry'):
 			self.serverSocketRetry = int(CFG.get('net', 'serverSocketRetry'))
@@ -163,22 +170,31 @@ class Server:
 							#do nothing--we've probably just connected without the client having sent any data
 							self.log('Error connecting to client:\n' + str(value) + "\n" + str(message), 'error\t')
 
-					#a connected client has sent data for us to process
+					# connected client has sent data for us to process
 					elif type(s) == type(self.server): #if it's not the server socket, but it is a socket,
-						grabber = requestHandler (s, self)  #create a thread to handle the request
-						self.input.remove ( s ) #tell the server thread to stop looking for input on this socket
+						grabber = requestHandler(s, self)  # create a thread to handle the request
+						self.input.remove(s) # tell the server thread to stop looking for input on this socket
 						grabber.start()
+
+						# run cleanup of input and output paths
+						if randrange(0,999,1) == 999:
+							dt = datetime.datetime.now() - datetime.timedelta(self.maxJobAge)
+							for sd in ['input', 'output']:
+								for ce in os.listdir(self.home + "files/" + sd):
+									ce = self.home + "files/" + sd + "/" + ce
+									if (os.path.isdir(ce)	and (datetime.datetime.fromtimestamp(os.path.getmtime(ce)) < dt)):
+										shutil.rmtree(ce, True)
 
 			self.log('Closing Server.server socket...')
 			self.server.close()
 
-		#exiting gracefully; allow all threads to finish before closing
+		# exiting gracefully; allow all threads to finish before closing
 		# close all threads
 		self.log("Queueing 'terminate' for each singleProcess instance.")
 		for c in self.singleProcesses:
 			self.jobQueue.put( 'terminate', True) #singleProcess threads will terminate when they process this as a job.  There's one for each thread.
 		self.jobQueue.join()
-		#the watchdog will shut itself down when all threads have removed themselves from its list.
+		# the watchdog will shut itself down when all threads have removed themselves from its list.
 		self.log('Server stopped')
 
 	def __del__(self):
