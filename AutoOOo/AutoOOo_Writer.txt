@@ -122,3 +122,20 @@ End Sub
 Sub moveCTBM(o as Object, bN As String)
 	moveCursorToBookMark(o, bN)
 End Sub
+
+' search and replace text
+Sub searchAndReplaceText(oDoc As Object, txtSearch As String, txtReplace As String, Optional caseSensitive As Boolean)
+	Dim oReplace as Object
+
+	If IsMissing(caseSensitive) Then caseSensitive = TRUE
+
+	oReplace = oDoc.createReplaceDescriptor()
+	oReplace.SearchCaseSensitive = caseSensitive
+	oReplace.SearchString = txtSearch
+	oReplace.ReplaceString = txtReplace
+
+	oDoc.ReplaceAll(oReplace)
+End Sub
+Sub searchNRT(o As Object, s As String, r As String, Optional cS As Boolean)
+	searchAndReplaceText(o, s, r, cS)
+End Sub
