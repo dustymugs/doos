@@ -15,20 +15,20 @@
 ;				output/
 ;
 ;			home0/
-;				.fontconfig/          -------------- .fontconfig and .openoffice.org are the config files needed for each instance of OO
-;				.openoffice.org/   -------------- to run simultaneously (they all need their own copies of config files). 
+;				.fontconfig/          -------------- .fontconfig and .config/libreoffice are the config files needed for each instance of OO
+;				.config/libreoffice/   -------------- to run simultaneously (they all need their own copies of config files). 
 ;				output/ 
 ;			home1/
 ;				.fontconfig/
-;				.openoffice.org/
+;				.config/libreoffice/
 ;				output/  ---------------------------- output stores the output files of macros while they're still being worked on
 ;			home2/
 ;				.fontconfig/
-;				.openoffice.org/
+;				.config/libreoffice/
 ;				output/
 ;			home3/
 ;				.fontconfig/
-;				.openoffice.org/
+;				.config/libreoffice/
 ;				output/
 ;
 ;		...(up to 'home' + numSingleProcesses)
@@ -99,7 +99,7 @@ maxDispatchAttempts=2
 binary=soffice
 
 # path to executable
-sofficepath=/opt/openoffice.org3/program/
+sofficepath=/usr/local/libreoffice3.6/program/
 
 # maximum life of the process controlled by runScript
 # once the maximum life is exceeded, the controlled process is restarted
