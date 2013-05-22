@@ -63,7 +63,7 @@ class Server:
 			print 'Value not provided for workspace.  Aborting...';
 			sys.exit(1);
 
-		self.logfile = open(self.home + 'logs/server.log', 'a')
+		self.logfile = open(self.home + 'logs/server.log', 'ab')
 
 		if CFG.has_section('server') and CFG.has_option('server', 'numSingleProcesses'):
 			self.numSingleProcesses = int(CFG.get('server', 'numSingleProcesses'))

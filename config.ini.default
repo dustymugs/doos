@@ -95,7 +95,10 @@ maxTicketNumber=15999999
 [runscript]
 maxDispatchAttempts=2
 
-# path to executable soffice
+# executable name
+binary=soffice
+
+# path to executable
 sofficepath=/opt/openoffice.org3/program/
 
 # maximum life of the process controlled by runScript
