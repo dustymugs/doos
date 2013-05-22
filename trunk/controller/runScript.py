@@ -74,6 +74,12 @@ class scriptRunner:
 			self.log('Missing sofficepath setting for thread ' + self.instanceId + '.  Using default of no path.')
 			self.sofficepath = ''
 
+		if CFG.has_section('runscript') and CFG.has_option('runscript', 'binary'):
+			self.binary = CFG.get('runscript', 'binary')
+		else:
+			self.log('Missing binary setting for thread ' + self.instanceId + '.  Using default of "soffice".')
+			self.binary = 'soffice'
+
 		# clean output directory
 		try:
 			output = self.home + 'output/'
@@ -95,7 +101,7 @@ class scriptRunner:
 
 		#create a new OpenOffice.org process and have it listen on a pipe
 		self.childOffice = \
-			subprocess.Popen( (self.sofficepath + 'soffice', "-accept=pipe,name=doosPipe" + str(self.instanceId) + ";urp;", "-headless", "-nofirststartwizard"), \
+			subprocess.Popen( (self.sofficepath + self.binary, "--accept=pipe,name=doosPipe" + str(self.instanceId) + ";urp;", "--headless", "--nofirststartwizard"), \
 				env={ "PATH": os.environ["PATH"], \
 				"HOME": self.home } ) #we need to have several 'homes' to have
 															#several OO instances running

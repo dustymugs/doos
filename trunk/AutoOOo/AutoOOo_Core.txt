@@ -26,7 +26,7 @@ Function setPropertyValue(Optional cName As String, Optional uValue) As com.sun.
 End Function
 
 ' open existing document
-Function openDocument(docName As String, Optional fileFilter, Optional filterOptions, Optional hideDoc As Boolean)
+Function openDocFromPath(docName As String, Optional fileFilter, Optional filterOptions, Optional hideDoc As Boolean)
 	Dim oDoc As Object
 	Dim fProp(1) As Variant
 
@@ -82,15 +82,15 @@ Function openDocument(docName As String, Optional fileFilter, Optional filterOpt
 	End If
 
 	If Len(fProp(1).Value) < 1 Then
-		openDocument = False
+		openDocFromPath = False
 		Exit Function
 	End If
 
 	oDoc = StarDesktop.loadComponentFromUrl(convertToURL(docName), "_blank", 0, fProp())
-	openDocument = oDoc
+	openDocFromPath = oDoc
 End Function
 Function openD(dN As String, Optional fF, Optional fO, Optional hD As Boolean)
-	openD = openDocument(dN, fF, fO, hD)
+	openD = openDocFromPath(dN, fF, fO, hD)
 End Function
 
 ' create new document from a template file
@@ -182,6 +182,14 @@ Function saveDocToPath(oDoc As Object, docName As String, Optional fileFilter, O
 			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
 				a(1) = setPropertyValue("FilterName", "HTML (StarWriter)")
 			End If
+		Case "xhtml"
+			' Calc
+			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
+				a(1) = setPropertyValue("FilterName", "XHTML Calc File")
+			' Writer
+			ElseIf (oDoc.SupportsService("com.sun.star.text.TextDocument")) Then
+				a(1) = setPropertyValue("FilterName", "XHTML Writer File")
+			End If
 		Case "txt","text","csv"
 			' Calc
 			If (oDoc.SupportsService("com.sun.star.sheet.SpreadsheetDocument")) Then
@@ -219,7 +227,7 @@ Function saveDocToPath(oDoc As Object, docName As String, Optional fileFilter, O
 	End If
 
 	' for export filters, use ToURL instead of AsURL otherwise exception thrown
-	If InStr(a(1).Value, "_Export") <> 0 Then
+	If fileFilter = "pdf" Or fileFilter = "xhtml" Then
 		oDoc.storeToURL(convertToURL(docName), a())
 	Else
 		oDoc.storeAsURL(convertToURL(docName), a())
